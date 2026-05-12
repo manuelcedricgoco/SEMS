@@ -83,11 +83,14 @@ try {
     $registrations = $stmt->fetch();
 
     $stmt = $pdo->prepare("
-        SELECT COUNT(*) as total_attendance,
-               SUM(CASE WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 1 ELSE 0 END) as present_count,
-               SUM(CASE WHEN a.login_time IS NULL OR a.logout_time IS NULL THEN 1 ELSE 0 END) as absent_count
-        FROM attendance a JOIN events e ON a.event_id=e.event_id WHERE $regWhere
-    ");
+    SELECT COUNT(*) as total_attendance,
+           SUM(CASE WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 1 ELSE 0 END) as present_count,
+           SUM(CASE WHEN a.login_time IS NULL     OR  a.logout_time IS NULL     THEN 1 ELSE 0 END) as absent_count
+    FROM registrations r
+    JOIN events e ON r.event_id = e.event_id
+    LEFT JOIN attendance a ON a.event_id = r.event_id AND a.user_id = r.user_id
+    WHERE $regWhere
+");
     $stmt->execute($regParams);
     $attendance = $stmt->fetch();
 
@@ -284,23 +287,25 @@ try {
     }
 
     $stmt = $pdo->prepare("
-        SELECT e.title as event_title, e.start_datetime,
-               d.dept_name, p.year_level, p.section,
-               p.first_name, p.last_name, p.middle_name, p.student_number,
-               a.login_time, a.logout_time, a.attendance_id,
-               CASE
-                   WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 'Present'
-                   WHEN a.login_time IS NOT NULL AND a.logout_time IS NULL THEN 'Partial'
-                   ELSE 'Absent'
-               END as attendance_status
-        FROM attendance a
-        JOIN events e ON a.event_id = e.event_id
-        JOIN users u ON a.user_id = u.user_id
-        JOIN profiles p ON u.user_id = p.user_id
-        JOIN departments d ON u.dept_id = d.dept_id
-        WHERE $attWhere
-        ORDER BY d.dept_name, p.year_level, p.section, p.last_name, p.first_name
-    ");
+    SELECT e.title as event_title, e.start_datetime,
+           d.dept_name, p.year_level, p.section,
+           p.first_name, p.last_name, p.middle_name, p.student_number,
+           a.login_time, a.logout_time, a.attendance_id,
+           CASE
+               WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 'Present'
+               WHEN a.login_time IS NOT NULL AND a.logout_time IS NULL  THEN 'Partial'
+               ELSE 'Absent'
+           END as attendance_status
+    FROM registrations r
+    JOIN events      e ON r.event_id  = e.event_id
+    JOIN users       u ON r.user_id   = u.user_id
+    JOIN profiles    p ON u.user_id   = p.user_id
+    JOIN departments d ON u.dept_id   = d.dept_id
+    LEFT JOIN attendance a
+           ON a.event_id = r.event_id AND a.user_id = r.user_id
+    WHERE $attWhere
+    ORDER BY d.dept_name, p.year_level, p.section, p.last_name, p.first_name
+");
     $stmt->execute($attParams);
     $overallAttendance = $stmt->fetchAll();
 
