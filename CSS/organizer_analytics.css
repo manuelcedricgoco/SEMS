@@ -1,0 +1,297 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   organizer_analytics.css
+   Extracted from organizer_analytics.php — do NOT modify the original PHP file.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+
+/* ── Entrance animation ── */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-up {
+  animation: fadeUp 0.42s ease both;
+}
+.d-0 {
+  animation-delay: 0ms;
+}
+.d-1 {
+  animation-delay: 70ms;
+}
+.d-2 {
+  animation-delay: 140ms;
+}
+.d-3 {
+  animation-delay: 210ms;
+}
+
+/* ── Sidebar nav-link (active left-border) ── */
+.nav-link {
+  position: relative;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+.nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: #22c55e;
+  transform: scaleY(0);
+  transition: transform 0.25s;
+}
+.nav-link:hover::before,
+.nav-link.active::before {
+  transform: scaleY(1);
+}
+.nav-link.active {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+.dark .nav-link.active {
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+/* ── Card hover ── */
+.card-hover {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.1);
+}
+.dark .card-hover:hover {
+  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Icon animate ── */
+.icon-wrap {
+  transition: transform 0.25s ease;
+}
+.nav-link:hover .icon-wrap {
+  transform: scale(1.1);
+}
+
+/* ── Chart container ── */
+.chart-wrap {
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
+/* ── Mobile sidebar overlay ── */
+#sb-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+#sb-overlay.show {
+  display: block;
+}
+
+/* ── Chart toolbar buttons ── */
+.ct-btn {
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #64748b;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.18s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.dark .ct-btn {
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.05);
+}
+.ct-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+.dark .ct-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.ct-btn.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+  color: #16a34a;
+}
+.dark .ct-btn.active {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: #22c55e;
+  color: #4ade80;
+}
+
+/* ── Feedback toolbar wrapper ── */
+#fbToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* ── Feedback search input ── */
+#fbSearch {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  font-size: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1e293b;
+  outline: none;
+  transition: border 0.2s;
+}
+.dark #fbSearch {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+#fbSearch:focus {
+  border-color: #22c55e;
+}
+
+/* ── Feedback filter/sort selects ── */
+#fbRatingFilter,
+#fbSortSelect {
+  padding: 5px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1e293b;
+  outline: none;
+  cursor: pointer;
+}
+.dark #fbRatingFilter,
+.dark #fbSortSelect {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+.dark #fbRatingFilter option,
+.dark #fbSortSelect option {
+  background: #1f2937;
+  color: #e2e8f0;
+}
+
+/* ── Feedback pagination ── */
+.fb-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.fb-pg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  color: #16a34a;
+  background: rgba(34, 197, 94, 0.08);
+}
+.dark .fb-pg-btn {
+  color: #4ade80;
+}
+.fb-pg-btn:hover:not(:disabled) {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: #22c55e;
+}
+.fb-pg-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.fb-pg-info {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+#fbNoResults {
+  display: none;
+  text-align: center;
+  padding: 32px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+/* ── Feedback filter group wrapper ── */
+.fb-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 2px 8px 2px 10px;
+}
+.dark .fb-filter-group {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.fb-filter-group #fbRatingFilter,
+.fb-filter-group #fbSortSelect {
+  background: transparent !important;
+  border: none !important;
+  padding: 3px 4px !important;
+}
+.fb-filter-icon {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* ── Star rating colors ── */
+.star-filled {
+  color: #f59e0b;
+}
+.star-empty {
+  color: #d1d5db;
+}
+.dark .star-empty {
+  color: #374151;
+}

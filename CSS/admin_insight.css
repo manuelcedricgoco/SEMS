@@ -1,0 +1,83 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   admin_insight.css
+   Extracted from admin_insight.php — do NOT modify the original PHP file.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* ── Stat Cards ── */
+.stat-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Sidebar & Overlay ── */
+#sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#sidebarOverlay {
+  transition: opacity 0.25s ease;
+}
+
+/* ── Nav items ── */
+.nav-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background: #3b82f6;
+  border-radius: 0 3px 3px 0;
+  transition: transform 0.2s ease;
+}
+.nav-item.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.nav-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.dark .nav-item.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* ── Chart containers ── */
+.chart-container {
+  position: relative;
+  height: 256px;
+  width: 100%;
+}
+
+/* ── Download buttons ── */
+.btn-download {
+  transition: all 0.2s ease;
+}
+.btn-download:hover {
+  transform: translateY(-1px);
+}
+.btn-download:active {
+  transform: scale(0.97);
+}

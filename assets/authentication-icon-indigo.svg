@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+  <title>Authentication Icon</title>
+  <rect width="128" height="128" rx="24" fill="#6366f1"/>
+  <!-- Shield -->
+  <path d="M64 14 L104 30 L104 68 Q104 98 64 114 Q24 98 24 68 L24 30 Z" fill="white" opacity="0.95"/>
+  <!-- Shield inner -->
+  <path d="M64 24 L96 37 L96 68 Q96 90 64 104 Q32 90 32 68 L32 37 Z" fill="#e0e7ff"/>
+  <!-- Lock body -->
+  <rect x="48" y="62" width="32" height="26" rx="6" fill="#4f46e5"/>
+  <!-- Lock shackle -->
+  <path d="M54 62 L54 54 Q54 44 64 44 Q74 44 74 54 L74 62" fill="none" stroke="#4f46e5" stroke-width="7" stroke-linecap="round"/>
+  <!-- Keyhole -->
+  <circle cx="64" cy="72" r="5" fill="white" opacity="0.9"/>
+  <rect x="61" y="74" width="6" height="8" rx="2" fill="white" opacity="0.9"/>
+</svg>

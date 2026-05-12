@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+  <title>Attendance Icon</title>
+  <rect width="128" height="128" rx="24" fill="#6366f1"/>
+  <!-- Clipboard -->
+  <rect x="18" y="22" width="92" height="96" rx="8" fill="white" opacity="0.95"/>
+  <!-- Clip top -->
+  <rect x="44" y="14" width="40" height="16" rx="6" fill="#4f46e5"/>
+  <rect x="52" y="16" width="24" height="10" rx="4" fill="#818cf8"/>
+  <!-- Row 1 - checked -->
+  <circle cx="34" cy="52" r="7" fill="#4f46e5"/>
+  <polyline points="30,52 33,56 39,48" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="48" y="48" width="50" height="4" rx="2" fill="#e0e7ff"/>
+  <rect x="48" y="55" width="34" height="3" rx="1.5" fill="#e0e7ff"/>
+  <!-- Row 2 - checked -->
+  <circle cx="34" cy="74" r="7" fill="#4f46e5"/>
+  <polyline points="30,74 33,78 39,70" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="48" y="70" width="50" height="4" rx="2" fill="#e0e7ff"/>
+  <rect x="48" y="77" width="40" height="3" rx="1.5" fill="#e0e7ff"/>
+  <!-- Row 3 - unchecked -->
+  <circle cx="34" cy="96" r="7" fill="#c7d2fe"/>
+  <rect x="48" y="92" width="50" height="4" rx="2" fill="#e0e7ff"/>
+  <rect x="48" y="99" width="28" height="3" rx="1.5" fill="#e0e7ff"/>
+</svg>

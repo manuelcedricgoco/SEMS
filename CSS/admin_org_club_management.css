@@ -1,0 +1,171 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   admin_org_club_management.css
+   Extracted from admin_org_club_management.php — do NOT modify the original PHP file.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* ── Org / Club Cards ── */
+.org-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.org-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Sidebar & Overlay ── */
+#sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#overlay {
+  transition: opacity 0.25s ease;
+}
+
+/* ── Nav items ── */
+.nav-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background: #3b82f6;
+  border-radius: 0 3px 3px 0;
+  transition: transform 0.2s ease;
+}
+.nav-item.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.nav-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.dark .nav-item.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* ── Modal entrance animation ── */
+.modal-enter {
+  animation: modalIn 0.25s ease both;
+}
+@keyframes modalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Global background/color transitions ── */
+body,
+.bg-transition {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
+}
+
+/* ── Logo gradient (sidebar icon + avatar fallback) ── */
+.logo-gradient {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+}
+
+/* ── Card animation delays ── */
+.card-anim:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.card-anim:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.card-anim:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.card-anim:nth-child(4) {
+  animation-delay: 0.2s;
+}
+.card-anim:nth-child(5) {
+  animation-delay: 0.25s;
+}
+.card-anim:nth-child(6) {
+  animation-delay: 0.3s;
+}
+
+/* ── Spinner ── */
+.spinner {
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── List item hover ── */
+.list-item-hover {
+  transition: all 0.15s ease;
+}
+.list-item-hover:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+.dark .list-item-hover:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* ── Skeleton loading ── */
+.skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.5s infinite;
+}
+.dark .skeleton {
+  background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+  background-size: 200% 100%;
+}
+@keyframes skeleton {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── Stat clickable cards ── */
+.stat-clickable {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.stat-clickable:hover {
+  transform: translateY(-2px);
+}
+.stat-clickable:active {
+  transform: scale(0.98);
+}

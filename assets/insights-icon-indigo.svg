@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+  <title>Insights Icon</title>
+  <rect width="128" height="128" rx="24" fill="#6366f1"/>
+  <!-- Lightbulb bulb -->
+  <circle cx="64" cy="46" r="28" fill="white" opacity="0.95"/>
+  <!-- Bulb base neck -->
+  <rect x="52" y="70" width="24" height="8" rx="3" fill="white" opacity="0.95"/>
+  <rect x="54" y="78" width="20" height="6" rx="3" fill="white" opacity="0.85"/>
+  <rect x="56" y="84" width="16" height="6" rx="3" fill="white" opacity="0.75"/>
+  <!-- Filament lines inside bulb -->
+  <line x1="64" y1="28" x2="64" y2="46" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
+  <line x1="53" y1="34" x2="64" y2="46" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="75" y1="34" x2="64" y2="46" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Inner glow circle -->
+  <circle cx="64" cy="44" r="12" fill="#e0e7ff"/>
+  <!-- Shine sparkles -->
+  <rect x="82" y="20" width="10" height="3" rx="2" fill="white" opacity="0.7" transform="rotate(40 87 21)"/>
+  <rect x="90" y="36" width="10" height="3" rx="2" fill="white" opacity="0.5"/>
+  <!-- Trend arrow below -->
+  <rect x="22" y="100" width="84" height="14" rx="6" fill="#4f46e5"/>
+  <polyline points="30,110 46,103 60,108 76,100 92,104 104,97" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

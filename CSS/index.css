@@ -1,0 +1,329 @@
+/* ═══════════════════════════════════════════════════════════
+   SEMS - School Event Management System
+   Landing Page — Stylesheet (index.css)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════
+   GLASSMORPHISM
+════════════════════════════════════════════════════════════ */
+
+/* Light variant — used on navbar when scrolled */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* Dark variant — used on dark background sections */
+.glass-dark {
+    background: rgba(30, 41, 59, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+/* ════════════════════════════════════════════════════════════
+   GRADIENT TEXT
+════════════════════════════════════════════════════════════ */
+.gradient-text {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ════════════════════════════════════════════════════════════
+   CARD HOVER — LIFT EFFECT
+════════════════════════════════════════════════════════════ */
+.card-hover {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
+}
+
+/* ════════════════════════════════════════════════════════════
+   BUTTON SHINE EFFECT
+   White glint that sweeps across on hover
+════════════════════════════════════════════════════════════ */
+.btn-shine {
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-shine::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transition: left 0.5s;
+}
+
+.btn-shine:hover::before {
+    left: 100%;
+}
+
+/* ════════════════════════════════════════════════════════════
+   FEATURE CARD — ICON ANIMATION ON HOVER
+════════════════════════════════════════════════════════════ */
+.feature-icon {
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover .feature-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+/* ════════════════════════════════════════════════════════════
+   NAV LINK — ANIMATED UNDERLINE
+════════════════════════════════════════════════════════════ */
+.nav-link {
+    position: relative;
+}
+
+.nav-link::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -4px;
+    left: 0;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    transition: width 0.3s ease;
+}
+
+.nav-link:hover::after {
+    width: 100%;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SCROLL REVEAL
+   Sections fade in + slide up when scrolled into view.
+   The .active class is added by IntersectionObserver in JS.
+════════════════════════════════════════════════════════════ */
+.scroll-reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.8s ease-out;
+}
+
+.scroll-reveal.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ════════════════════════════════════════════════════════════
+   INFINITY LOOP MARQUEE
+════════════════════════════════════════════════════════════ */
+
+/* Track: a wide flex row that is animated to scroll */
+.marquee-track {
+    display: flex;
+    width: max-content;
+    will-change: transform;
+}
+
+/* Keyframes */
+@keyframes marquee {
+    0% {
+        transform: translateX(0%);
+    }
+
+    100% {
+        transform: translateX(-50%);
+    }
+}
+
+@keyframes marqueeReverse {
+    0% {
+        transform: translateX(-50%);
+    }
+
+    100% {
+        transform: translateX(0%);
+    }
+}
+
+/* Three speed/direction variants */
+.marquee-track--forward {
+    animation: marquee 60s linear infinite;
+}
+
+.marquee-track--reverse {
+    animation: marqueeReverse 70s linear infinite;
+}
+
+.marquee-track--fast {
+    animation: marquee 50s linear infinite;
+}
+
+/* Wrapper: hides overflow and adds edge fades */
+.marquee-wrapper {
+    overflow: hidden;
+    position: relative;
+}
+
+.marquee-wrapper::before,
+.marquee-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 120px;
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* Light background edge fades */
+.marquee-wrapper::before {
+    left: 0;
+    background: linear-gradient(to right, white, transparent);
+}
+
+.marquee-wrapper::after {
+    right: 0;
+    background: linear-gradient(to left, white, transparent);
+}
+
+/* Dark background edge fades (used on the stats ticker strip) */
+.marquee-wrapper.dark-fade::before {
+    background: linear-gradient(to right, #1e293b, transparent);
+}
+
+.marquee-wrapper.dark-fade::after {
+    background: linear-gradient(to left, #1e293b, transparent);
+}
+
+/* ════════════════════════════════════════════════════════════
+   DEMO / VIDEO MODAL
+════════════════════════════════════════════════════════════ */
+
+/* Overlay: starts invisible, fades in when .open is added */
+#demo-modal {
+    transition: opacity 0.35s ease, visibility 0.35s ease;
+    opacity: 0;
+    visibility: hidden;
+}
+
+#demo-modal.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Modal box: scales up and slides in when .open is added */
+#demo-modal .modal-box {
+    transform: scale(0.88) translateY(24px);
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#demo-modal.open .modal-box {
+    transform: scale(1) translateY(0);
+}
+
+/* Demo slides: only the .active slide is visible */
+.demo-slide {
+    display: none;
+}
+
+.demo-slide.active {
+    display: flex;
+}
+
+/* Progress bar fill animation (duration set via --duration CSS var by JS) */
+@keyframes progressBar {
+    from {
+        width: 0%;
+    }
+
+    to {
+        width: 100%;
+    }
+}
+
+.slide-progress {
+    animation: progressBar var(--duration, 4s) linear forwards;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PULSE RING — "Watch Demo" button attention effect
+   Two concentric rings expand outward from the button.
+════════════════════════════════════════════════════════════ */
+@keyframes pulseRing {
+    0% {
+        transform: scale(1);
+        opacity: 0.6;
+    }
+
+    100% {
+        transform: scale(1.9);
+        opacity: 0;
+    }
+}
+
+.pulse-ring::before,
+.pulse-ring::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid rgba(99, 102, 241, 0.5);
+    animation: pulseRing 2s ease-out infinite;
+}
+
+.pulse-ring::after {
+    animation-delay: 1s;
+}
+
+/* ════════════════════════════════════════════════════════════
+   KEYFRAME ALIASES
+   Defined here so they are available globally alongside Tailwind.
+════════════════════════════════════════════════════════════ */
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+@keyframes slideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}

@@ -1,0 +1,105 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   admin_user_management.css
+   Extracted from admin_user_management.php — do NOT modify the original PHP file.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+/* ── Stat Cards ── */
+.stat-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
+}
+
+/* ── Sidebar & Overlay ── */
+#sidebar {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#overlay {
+  transition: opacity 0.25s ease;
+}
+
+/* ── Card animation delays ── */
+.card-anim:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.card-anim:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.card-anim:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+/* ── Nav items ── */
+.nav-item {
+  position: relative;
+  transition: all 0.2s ease;
+}
+.nav-item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 60%;
+  background: #3b82f6;
+  border-radius: 0 3px 3px 0;
+  transition: transform 0.2s ease;
+}
+.nav-item.active::before {
+  transform: translateY(-50%) scaleY(1);
+}
+.nav-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+.dark .nav-item.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* ── Table rows ── */
+.user-row {
+  transition: background-color 0.15s ease;
+}
+
+/* ── Modal entrance animation ── */
+.modal-enter {
+  animation: modalIn 0.25s ease both;
+}
+@keyframes modalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ── Global background/color transitions ── */
+body,
+.bg-transition {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
+}
