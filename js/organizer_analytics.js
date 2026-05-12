@@ -3,6 +3,7 @@
  * Handles: Theme, Sidebar, Charts (Registration Trends,
  *          Event Performance, Department Doughnut),
  *          Chart toolbars, Download PNG,
+ *          Attendance accordion / filter / CSV export,
  *          Feedback list (search / filter / sort / paginate)
  *
  * Requires SEMS_ANALYTICS_DATA to be defined inline before this script:
@@ -16,25 +17,28 @@
  *         deptNames:     [...],
  *         deptCounts:    [...],
  *         deptColors:    [...],
- *         showDeptChart: true|false,   // SSG / LSC / club officers only
+ *         showDeptChart: true|false,
+ *         allowedDepts:  null | [...],   // null = all; array = restricted list
  *     };
  *   <\/script>
  */
 
 // ═══════════════════════════════════════════════════════════════
-// DATA (from bridge)
+// DATA  (injected by PHP bridge before this file loads)
 // ═══════════════════════════════════════════════════════════════
 
-var _d          = (typeof SEMS_ANALYTICS_DATA !== 'undefined') ? SEMS_ANALYTICS_DATA : {};
-var months      = _d.months        || [];
-var regCounts   = _d.regCounts     || [];
-var eventTitles = _d.eventTitles   || [];
-var eventRegs   = _d.eventRegs     || [];
-var eventAttend = _d.eventAttend   || [];
-var deptNames   = _d.deptNames     || [];
-var deptCounts  = _d.deptCounts    || [];
-var deptColors  = _d.deptColors    || [];
-var showDeptChart = (_d.showDeptChart === true); // explicit boolean guard
+var _d           = (typeof SEMS_ANALYTICS_DATA !== 'undefined') ? SEMS_ANALYTICS_DATA : {};
+var months       = _d.months       || [];
+var regCounts    = _d.regCounts    || [];
+var eventTitles  = _d.eventTitles  || [];
+var eventRegs    = _d.eventRegs    || [];
+var eventAttend  = _d.eventAttend  || [];
+var deptNames    = _d.deptNames    || [];
+var deptCounts   = _d.deptCounts   || [];
+var deptColors   = _d.deptColors   || [];
+var showDeptChart = (_d.showDeptChart === true);
+// null = all departments allowed; string[] = restricted list
+var allowedDepts = _d.allowedDepts || null;
 
 // ═══════════════════════════════════════════════════════════════
 // THEME
@@ -100,7 +104,6 @@ function chartTheme() {
 function initCharts() {
     var c = chartTheme();
 
-    // Destroy existing instances safely
     if (registrationChart) { registrationChart.destroy(); registrationChart = null; }
     if (performanceChart)  { performanceChart.destroy();  performanceChart  = null; }
     if (departmentChart)   { departmentChart.destroy();   departmentChart   = null; }
@@ -117,7 +120,8 @@ function initCharts() {
                     data: regCounts,
                     borderColor: '#22c55e',
                     backgroundColor: 'rgba(34,197,94,.12)',
-                    tension: 0.4, fill: true,
+                    tension: 0.4,
+                    fill: true,
                     pointBackgroundColor: '#22c55e',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2,
@@ -126,14 +130,18 @@ function initCharts() {
                 }]
             },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
-                    legend: { position:'top', align:'end', labels:{ usePointStyle:true, padding:16, font:{size:11}, color:c.text } },
-                    tooltip: { backgroundColor:c.tipBg, titleColor:c.tipFg, bodyColor:c.text, cornerRadius:10, padding:10 }
+                    legend: {
+                        position: 'top', align: 'end',
+                        labels: { usePointStyle: true, padding: 16, font: { size: 11 }, color: c.text }
+                    },
+                    tooltip: { backgroundColor: c.tipBg, titleColor: c.tipFg, bodyColor: c.text, cornerRadius: 10, padding: 10 }
                 },
                 scales: {
-                    y: { beginAtZero:true, grid:{ color:c.grid }, ticks:{ color:c.text }, border:{ display:false } },
-                    x: { grid:{ display:false }, ticks:{ color:c.text } }
+                    y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.text }, border: { display: false } },
+                    x: { grid: { display: false }, ticks: { color: c.text } }
                 }
             }
         });
@@ -152,45 +160,54 @@ function initCharts() {
                         data: eventRegs,
                         backgroundColor: '#22c55e',
                         borderRadius: 5,
-                        barPercentage: .55,
-                        categoryPercentage: .75,
+                        barPercentage: 0.55,
+                        categoryPercentage: 0.75,
                     },
                     {
                         label: 'Attendance',
                         data: eventAttend,
                         backgroundColor: '#3b82f6',
                         borderRadius: 5,
-                        barPercentage: .55,
-                        categoryPercentage: .75,
+                        barPercentage: 0.55,
+                        categoryPercentage: 0.75,
                     }
                 ]
             },
             options: {
-                responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y',
                 plugins: {
-                    legend: { position:'top', align:'end', labels:{ usePointStyle:true, padding:16, font:{size:11}, color:c.text } },
-                    tooltip: { backgroundColor:c.tipBg, titleColor:c.tipFg, bodyColor:c.text, cornerRadius:10, padding:10 }
+                    legend: {
+                        position: 'top', align: 'end',
+                        labels: { usePointStyle: true, padding: 16, font: { size: 11 }, color: c.text }
+                    },
+                    tooltip: { backgroundColor: c.tipBg, titleColor: c.tipFg, bodyColor: c.text, cornerRadius: 10, padding: 10 }
                 },
                 scales: {
                     y: {
-                        grid: { display:false },
+                        grid: { display: false },
                         ticks: {
                             color: c.text,
-                            font: { size:11 },
+                            font: { size: 11 },
                             callback: function (v) {
                                 var l = performanceChart && performanceChart.data.labels[v];
                                 return l && l.length > 18 ? l.slice(0, 18) + '…' : l;
                             }
                         }
                     },
-                    x: { beginAtZero:true, grid:{ color:c.grid }, ticks:{ color:c.text, precision:0 }, border:{ display:false } }
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: c.grid },
+                        ticks: { color: c.text, precision: 0 },
+                        border: { display: false }
+                    }
                 }
             }
         });
     }
 
     // ── Department Doughnut ──────────────────────────────────
-    // Only rendered when the canvas exists (SSG / LSC / club officers).
     var deptCanvas = document.getElementById('departmentChart');
     if (deptCanvas && showDeptChart) {
         departmentChart = new Chart(deptCanvas.getContext('2d'), {
@@ -205,10 +222,15 @@ function initCharts() {
                 }]
             },
             options: {
-                responsive: true, maintainAspectRatio: false, cutout: '68%',
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '68%',
                 plugins: {
-                    legend: { display:true, position:'right', labels:{ color:c.text, font:{size:11}, usePointStyle:true } },
-                    tooltip: { backgroundColor:c.tipBg, titleColor:c.tipFg, bodyColor:c.text, cornerRadius:10, padding:10 }
+                    legend: {
+                        display: true, position: 'right',
+                        labels: { color: c.text, font: { size: 11 }, usePointStyle: true }
+                    },
+                    tooltip: { backgroundColor: c.tipBg, titleColor: c.tipFg, bodyColor: c.text, cornerRadius: 10, padding: 10 }
                 }
             }
         });
@@ -232,8 +254,8 @@ function buildRegToolbar() {
 
     var curRange = (document.getElementById('dateFilter') || {}).value || '30days';
     var ranges   = [
-        { l:'7D', v:'7days' }, { l:'30D', v:'30days' },
-        { l:'3M', v:'90days' }, { l:'Year', v:'year' }, { l:'All', v:'all' }
+        { l: '7D', v: '7days' }, { l: '30D', v: '30days' },
+        { l: '3M', v: '90days' }, { l: 'Year', v: 'year' }, { l: 'All', v: 'all' }
     ];
 
     ranges.forEach(function (r) {
@@ -255,7 +277,7 @@ function buildRegToolbar() {
     lineBtn.className = 'ct-btn active';
     lineBtn.innerHTML = '<i class="fas fa-chart-line"></i>';
 
-    var barBtn  = document.createElement('button');
+    var barBtn = document.createElement('button');
     barBtn.className  = 'ct-btn';
     barBtn.innerHTML  = '<i class="fas fa-chart-bar"></i>';
 
@@ -292,7 +314,7 @@ function buildPerfToolbar() {
 
     if (dlBtn) dlBtn.onclick = function () { dlChart(performanceChart, 'event-performance'); };
 
-    var rawL = ((performanceChart && performanceChart.data.labels)   || []).slice();
+    var rawL = ((performanceChart && performanceChart.data.labels)                                          || []).slice();
     var rawR = ((performanceChart && performanceChart.data.datasets[0] && performanceChart.data.datasets[0].data) || []).slice();
     var rawA = ((performanceChart && performanceChart.data.datasets[1] && performanceChart.data.datasets[1].data) || []).slice();
 
@@ -322,7 +344,6 @@ function buildPerfToolbar() {
     tb.appendChild(attSort);
 }
 
-// ── Download chart as PNG ──
 function dlChart(chart, name) {
     if (!chart) return;
     var a = document.createElement('a');
@@ -332,22 +353,196 @@ function dlChart(chart, name) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FEEDBACK: search / filter / sort / paginate
+// ATTENDANCE — accordion toggles
+// ═══════════════════════════════════════════════════════════════
+
+function toggleDeptSection(hdr) {
+    var ds   = hdr.closest('.attendance-dept-section');
+    var c    = ds.querySelector('.attendance-dept-content');
+    var open = ds.classList.contains('open');
+    if (open) {
+        c.classList.add('hidden'); c.classList.remove('!block'); ds.classList.remove('open');
+    } else {
+        c.classList.remove('hidden'); c.classList.add('!block'); ds.classList.add('open');
+    }
+}
+
+function toggleSection(hdr) {
+    var sec  = hdr.closest('.attendance-section');
+    var c    = sec.querySelector('.attendance-section-content');
+    var open = sec.classList.contains('open');
+    if (open) {
+        c.classList.add('hidden'); c.classList.remove('!block'); sec.classList.remove('open');
+    } else {
+        c.classList.remove('hidden'); c.classList.add('!block'); sec.classList.add('open');
+    }
+}
+
+function toggleAttendanceFilters() {
+    var bar = document.getElementById('attendanceFilters');
+    if (bar.classList.contains('hidden')) {
+        bar.classList.remove('hidden');
+    } else {
+        bar.classList.add('hidden');
+        document.getElementById('attDeptFilter').value   = 'all';
+        document.getElementById('attYearFilter').value   = 'all';
+        document.getElementById('attStatusFilter').value = 'all';
+        document.getElementById('attSearchFilter').value = '';
+        filterAttendanceTable();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ATTENDANCE — filter
+// ═══════════════════════════════════════════════════════════════
+
+function filterAttendanceTable() {
+    var dF = (document.getElementById('attDeptFilter')   || { value: 'all' }).value;
+    var yF = (document.getElementById('attYearFilter')   || { value: 'all' }).value;
+    var sF = (document.getElementById('attStatusFilter') || { value: 'all' }).value;
+    var q  = ((document.getElementById('attSearchFilter') || { value: '' }).value || '').toLowerCase().trim();
+
+    /* Step 1 — show / hide individual rows */
+    document.querySelectorAll('.attendance-row').forEach(function (row) {
+        var show = true;
+        // Enforce server-side dept restriction client-side as well
+        if (allowedDepts !== null && allowedDepts.indexOf(row.dataset.department) === -1) show = false;
+        if (show && dF !== 'all' && row.dataset.department !== dF) show = false;
+        if (show && yF !== 'all' && row.dataset.year       !== yF) show = false;
+        if (show && sF !== 'all' && row.dataset.status     !== sF) show = false;
+        if (show && q) {
+            var name = (row.dataset.name          || '');
+            var num  = (row.dataset.studentNumber || '').toLowerCase();
+            if (!name.includes(q) && !num.includes(q)) show = false;
+        }
+        row.style.display = show ? '' : 'none';
+    });
+
+    /* Step 2 — section containers */
+    document.querySelectorAll('.attendance-section').forEach(function (sec) {
+        var vis = Array.from(sec.querySelectorAll('.attendance-row'))
+            .filter(function (r) { return r.style.display !== 'none'; });
+        if (vis.length === 0) {
+            sec.style.display = 'none';
+        } else {
+            sec.style.display = '';
+            var c = sec.querySelector('.attendance-section-content');
+            if (c) { c.classList.remove('hidden'); c.classList.add('!block'); sec.classList.add('open'); }
+        }
+    });
+
+    /* Step 3 — year-group divs only (NOT <tr> rows) */
+    document.querySelectorAll('.att-year-group').forEach(function (yg) {
+        var vis = Array.from(yg.querySelectorAll('.attendance-row'))
+            .filter(function (r) { return r.style.display !== 'none'; });
+        yg.style.display = vis.length === 0 ? 'none' : '';
+    });
+
+    /* Step 4 — dept sections */
+    document.querySelectorAll('.attendance-dept-section').forEach(function (ds) {
+        var vis = Array.from(ds.querySelectorAll('.attendance-row'))
+            .filter(function (r) { return r.style.display !== 'none'; });
+        if (vis.length === 0) {
+            ds.style.display = 'none';
+        } else {
+            ds.style.display = '';
+            var c = ds.querySelector('.attendance-dept-content');
+            if (c) { c.classList.remove('hidden'); c.classList.add('!block'); ds.classList.add('open'); }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ATTENDANCE — CSV export
+// ═══════════════════════════════════════════════════════════════
+
+function exportAttendanceToCSV() {
+    var allRows = document.querySelectorAll('.attendance-row');
+    if (allRows.length === 0) { alert('No attendance data available.'); return; }
+
+    var bar         = document.getElementById('attendanceFilters');
+    var filtersOpen = bar && !bar.classList.contains('hidden');
+
+    var dF   = filtersOpen ? (document.getElementById('attDeptFilter')   || { value: 'all' }).value : 'all';
+    var yF   = filtersOpen ? (document.getElementById('attYearFilter')   || { value: 'all' }).value : 'all';
+    var sF   = filtersOpen ? (document.getElementById('attStatusFilter') || { value: 'all' }).value : 'all';
+    var rawQ = filtersOpen ? ((document.getElementById('attSearchFilter') || { value: '' }).value || '') : '';
+    var q    = rawQ.toLowerCase().trim();
+
+    var rows = Array.from(allRows).filter(function (row) {
+        if (allowedDepts !== null && allowedDepts.indexOf(row.dataset.department) === -1) return false;
+        if (dF !== 'all' && row.dataset.department !== dF) return false;
+        if (yF !== 'all' && row.dataset.year       !== yF) return false;
+        if (sF !== 'all' && row.dataset.status     !== sF) return false;
+        if (q) {
+            var n   = (row.dataset.name || '');
+            var num = (row.dataset.studentNumber || '').toLowerCase();
+            if (!n.includes(q) && !num.includes(q)) return false;
+        }
+        return true;
+    });
+
+    if (rows.length === 0) { alert('No data to export. Please adjust your filters.'); return; }
+
+    var headers = ['Department', 'Year Level', 'Section', 'Student Name', 'Student Number', 'Status', 'Login Time', 'Logout Time', 'Event'];
+    var csv     = [headers];
+
+    rows.forEach(function (row) {
+        var cells = row.querySelectorAll('td');
+        var g = function (i) { return cells[i] ? cells[i].textContent.trim().replace(/\u2014|—/g, '') : ''; };
+        csv.push([
+            row.dataset.department || '', row.dataset.year || '', row.dataset.section || '',
+            g(0), g(1), g(2), g(3), g(4), g(5)
+        ]);
+    });
+
+    var content = csv.map(function (r) {
+        return r.map(function (cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
+    }).join('\n');
+
+    var blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'attendance_report_' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.csv';
+    a.style.visibility = 'hidden';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FEEDBACK — search / filter / sort / paginate
 // ═══════════════════════════════════════════════════════════════
 
 function loadFeedback() {
     if (typeof applyFbFilters === 'function') applyFbFilters();
 }
 
+// ═══════════════════════════════════════════════════════════════
+// DOM READY
+// ═══════════════════════════════════════════════════════════════
+
 document.addEventListener('DOMContentLoaded', function () {
+
+    // Init charts
     initCharts();
 
+    // Auto-expand first department accordion
+    var firstDept = document.querySelector('.attendance-dept-section');
+    if (firstDept) {
+        var hdr = firstDept.querySelector('.flex.items-center.justify-between.cursor-pointer');
+        if (hdr) toggleDeptSection(hdr);
+    }
+
+    // ── Feedback setup ────────────────────────────────────────
     var feedbackSection = document.getElementById('feedbackList');
     if (!feedbackSection || feedbackSection.children.length === 0) return;
 
     var allCards = Array.from(feedbackSection.children);
 
-    // Tag each card with data attributes for filtering
+    // Tag each card with data attributes for filtering / sorting
     allCards.forEach(function (card) {
         var filled = card.querySelectorAll('.fa-star:not(.fa-star-half-alt)').length;
         var half   = card.querySelectorAll('.fa-star-half-alt').length;
@@ -356,7 +551,7 @@ document.addEventListener('DOMContentLoaded', function () {
         card.dataset.evTitle = spans[0] ? spans[0].textContent.trim().toLowerCase() : '';
     });
 
-    // Build toolbar
+    // Build toolbar DOM
     var tb = document.createElement('div');
     tb.id  = 'fbToolbar';
 
@@ -367,18 +562,31 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var fbRating = document.createElement('select');
     fbRating.id  = 'fbRatingFilter';
-    fbRating.innerHTML = '<option value="all">All Ratings</option><option value="5">5★ only</option><option value="4">4+★</option><option value="3">3+★</option><option value="2">2+★</option>';
+    fbRating.innerHTML = [
+        '<option value="all">All Ratings</option>',
+        '<option value="5">5★ only</option>',
+        '<option value="4">4+★</option>',
+        '<option value="3">3+★</option>',
+        '<option value="2">2+★</option>',
+    ].join('');
 
     var fbSort = document.createElement('select');
     fbSort.id  = 'fbSortSelect';
-    fbSort.innerHTML = '<option value="newest">Newest First</option><option value="oldest">Oldest First</option><option value="highest">Highest Rating</option><option value="lowest">Lowest Rating</option>';
+    fbSort.innerHTML = [
+        '<option value="newest">Newest First</option>',
+        '<option value="oldest">Oldest First</option>',
+        '<option value="highest">Highest Rating</option>',
+        '<option value="lowest">Lowest Rating</option>',
+    ].join('');
 
     tb.appendChild(fbSearch);
     tb.appendChild(fbRating);
     tb.appendChild(fbSort);
 
     var noRes = document.getElementById('fbNoResults');
-    noRes.innerHTML = '<i class="fas fa-search" style="font-size:20px;display:block;margin-bottom:8px;color:#9ca3af"></i>No feedback matches your filters.';
+    if (noRes) {
+        noRes.innerHTML = '<i class="fas fa-search" style="font-size:20px;display:block;margin-bottom:8px;color:#9ca3af"></i>No feedback matches your filters.';
+    }
 
     feedbackSection.parentElement.insertBefore(tb, feedbackSection);
 
@@ -394,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function () {
     prevBtn.className = 'fb-pg-btn';
     prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i> Prev';
 
-    var pgInfo  = document.createElement('span');
+    var pgInfo = document.createElement('span');
     pgInfo.className = 'fb-pg-info';
 
     var nextBtn = document.createElement('button');
@@ -419,8 +627,8 @@ document.addEventListener('DOMContentLoaded', function () {
         pgInfo.textContent = visible.length > 0
             ? 'Page ' + (page + 1) + ' of ' + total + '  (' + visible.length + ' review' + (visible.length !== 1 ? 's' : '') + ')'
             : '';
-        noRes.style.display = visible.length === 0 ? 'block' : 'none';
-        pag.style.display   = visible.length === 0 ? 'none'  : 'flex';
+        if (noRes) noRes.style.display = visible.length === 0 ? 'block' : 'none';
+        pag.style.display = visible.length === 0 ? 'none' : 'flex';
     }
 
     prevBtn.onclick = function () { page--; renderPage(); };
@@ -461,7 +669,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateRatingSummary(cards) {
         var total = cards.length;
-        var dist  = { 1:0, 2:0, 3:0, 4:0, 5:0 };
+        var dist  = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
         var sum   = 0;
 
         cards.forEach(function (c) {
@@ -508,7 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var fbEventFilter = document.getElementById('feedbackEventFilter');
     if (fbEventFilter) fbEventFilter.addEventListener('change', window.applyFbFilters);
 
-    // Wrap filter controls with icon groups
+    // Wrap filter selects with icon groups
     function wrapIcon(selId, iconCls) {
         var sel = document.getElementById(selId);
         if (!sel || sel.parentElement.classList.contains('fb-filter-group')) return;
@@ -520,6 +728,7 @@ document.addEventListener('DOMContentLoaded', function () {
         group.appendChild(icon);
         group.appendChild(sel);
     }
+
     wrapIcon('fbRatingFilter', 'fa-star');
     wrapIcon('fbSortSelect',   'fa-sort-amount-down');
 

@@ -1,9 +1,6 @@
 <?php
 /* ============================================================
  | FILE   : organizer_analytics.php
- | FIXES  : 1) </table> → </tr> in thead (broken table layout)
- |          2) exportAttendanceToCSV() reads filter inputs directly
- |          3) filterAttendanceTable() auto-expands matching sections
  ============================================================ */
 
 session_start();
@@ -83,14 +80,14 @@ try {
     $registrations = $stmt->fetch();
 
     $stmt = $pdo->prepare("
-    SELECT COUNT(*) as total_attendance,
-           SUM(CASE WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 1 ELSE 0 END) as present_count,
-           SUM(CASE WHEN a.login_time IS NULL     OR  a.logout_time IS NULL     THEN 1 ELSE 0 END) as absent_count
-    FROM registrations r
-    JOIN events e ON r.event_id = e.event_id
-    LEFT JOIN attendance a ON a.event_id = r.event_id AND a.user_id = r.user_id
-    WHERE $regWhere
-");
+        SELECT COUNT(*) as total_attendance,
+               SUM(CASE WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 1 ELSE 0 END) as present_count,
+               SUM(CASE WHEN a.login_time IS NULL     OR  a.logout_time IS NULL     THEN 1 ELSE 0 END) as absent_count
+        FROM registrations r
+        JOIN events e ON r.event_id = e.event_id
+        LEFT JOIN attendance a ON a.event_id = r.event_id AND a.user_id = r.user_id
+        WHERE $regWhere
+    ");
     $stmt->execute($regParams);
     $attendance = $stmt->fetch();
 
@@ -126,29 +123,19 @@ try {
     $stmt->execute([$organizer_id]);
     $userInfo = $stmt->fetch();
 
-    /* ── DEPARTMENT VISIBILITY PERMISSION ────────────────────────────────
-     | "BS Operational Management" attendance rows and its filter option
-     | are visible ONLY to the organisations/clubs listed below.
-     | Any other organizer (e.g. a regular dept-level org) will not see
-     | BS Operational Management students in the report or dropdown.
-     ──────────────────────────────────────────────────────────────────── */
+    /* ── DEPARTMENT VISIBILITY PERMISSION ── */
     $_orgNameUpper  = strtoupper(trim($userInfo['org_name']  ?? ''));
     $_clubNameUpper = strtoupper(trim($userInfo['club_name'] ?? ''));
 
     $allowedForAllDepts = [
         'SSG', 'SUPREME STUDENT GOVERNMENT',
         'LSC', 'LIBRARY STUDENT COUNCIL',
-        'SPORTS CLUB',
-        'SCI-MATH CLUB',
-        'PEER TO PEER FACILITATOR',
-        'ENGLISH CLUB',
-        'SAMFILKO',
+        'SPORTS CLUB', 'SCI-MATH CLUB', 'PEER TO PEER FACILITATOR',
+        'ENGLISH CLUB', 'SAMFILKO',
         'UNITED MANGYAN STUDENTS ORGANIZATION',
         'CAMPUS YOUTH MINISTRY IN ACTION',
     ];
 
-    // TRUE  → this organizer may see all departments incl. BS Operational Management
-    // FALSE → BS Operational Management is hidden from data + dropdown
     $canSeeAllDepts = in_array($_orgNameUpper,  $allowedForAllDepts)
                    || in_array($_clubNameUpper, $allowedForAllDepts);
 
@@ -275,41 +262,38 @@ try {
     $stmt->execute($perfParams);
     $eventPerformance = $stmt->fetchAll();
 
-    /* Overall Attendance */
+    /* ── Overall Attendance (registration-based) ── */
     $attParams = [];
     $attWhere  = buildOrgEventWhere('e', $organizer_id, $myOrgId, $myClubId, $attParams);
     if ($eventFilter !== 'all' && is_numeric($eventFilter)) { $attWhere .= " AND e.event_id = ?"; $attParams[] = (int)$eventFilter; }
     if ($statusFilter !== 'all') { $attWhere .= " AND e.status = ?"; $attParams[] = $statusFilter; }
 
-    // Restrict BS Operational Management visibility to allowed orgs/clubs only
     if (!$canSeeAllDepts) {
         $attWhere .= " AND UPPER(TRIM(d.dept_name)) != 'BS OPERATIONAL MANAGEMENT'";
     }
 
     $stmt = $pdo->prepare("
-    SELECT e.title as event_title, e.start_datetime,
-           d.dept_name, p.year_level, p.section,
-           p.first_name, p.last_name, p.middle_name, p.student_number,
-           a.login_time, a.logout_time, a.attendance_id,
-           CASE
-               WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 'Present'
-               WHEN a.login_time IS NOT NULL AND a.logout_time IS NULL  THEN 'Partial'
-               ELSE 'Absent'
-           END as attendance_status
-    FROM registrations r
-    JOIN events      e ON r.event_id  = e.event_id
-    JOIN users       u ON r.user_id   = u.user_id
-    JOIN profiles    p ON u.user_id   = p.user_id
-    JOIN departments d ON u.dept_id   = d.dept_id
-    LEFT JOIN attendance a
-           ON a.event_id = r.event_id AND a.user_id = r.user_id
-    WHERE $attWhere
-    ORDER BY d.dept_name, p.year_level, p.section, p.last_name, p.first_name
-");
+        SELECT e.title as event_title, e.start_datetime,
+               d.dept_name, p.year_level, p.section,
+               p.first_name, p.last_name, p.middle_name, p.student_number,
+               a.login_time, a.logout_time, a.attendance_id,
+               CASE
+                   WHEN a.login_time IS NOT NULL AND a.logout_time IS NOT NULL THEN 'Present'
+                   WHEN a.login_time IS NOT NULL AND a.logout_time IS NULL     THEN 'Partial'
+                   ELSE 'Absent'
+               END as attendance_status
+        FROM registrations r
+        JOIN events      e ON r.event_id  = e.event_id
+        JOIN users       u ON r.user_id   = u.user_id
+        JOIN profiles    p ON u.user_id   = p.user_id
+        JOIN departments d ON u.dept_id   = d.dept_id
+        LEFT JOIN attendance a ON a.event_id = r.event_id AND a.user_id = r.user_id
+        WHERE $attWhere
+        ORDER BY d.dept_name, p.year_level, p.section, p.last_name, p.first_name
+    ");
     $stmt->execute($attParams);
     $overallAttendance = $stmt->fetchAll();
 
-    // Department filter dropdown — exclude BS Operational Management for non-allowed organizers
     $bsomExclusion = $canSeeAllDepts ? '' : "AND UPPER(TRIM(d.dept_name)) != 'BS OPERATIONAL MANAGEMENT'";
     $deptStmt = $pdo->prepare("
         SELECT DISTINCT d.dept_id, d.dept_name FROM departments d
@@ -403,50 +387,34 @@ $deptColors  = ['#22c55e','#3b82f6','#a855f7','#eab308','#ef4444','#ec4899'];
 $ssgLscNames   = ['SSG','SUPREME STUDENT GOVERNMENT','SUPREME STUDENTS GOVERNMENT','LSC','LIBRARY STUDENT COUNCIL'];
 $showDeptChart = ($myClubId !== null) || in_array(strtoupper(trim($orgName??'')), $ssgLscNames);
 
-/* ============================================================
- | ORG → DEPARTMENT VISIBILITY MAP
- | SSG, LSC, and all clubs → see ALL departments
- | Specific orgs → restricted to ONE department only
- ============================================================ */
+/* ── ORG → DEPARTMENT VISIBILITY MAP ── */
 $orgDeptMap = [
-    'JUNIOR FINANCIAL MANAGERS SOCIETY'   => 'BS Financial Management',
-    'YOUTH MENTORS ORGANIZATION'          => 'Bachelor of Elementary Education',
-    'JUNIOR OPERATIONS EXECUTIVE SOCIETY' => 'BS Operational Management',
+    'JUNIOR FINANCIAL MANAGERS SOCIETY'     => 'BS Financial Management',
+    'YOUTH MENTORS ORGANIZATION'            => 'Bachelor of Elementary Education',
+    'JUNIOR OPERATIONS EXECUTIVE SOCIETY'   => 'BS Operational Management',
     'PROGRAMMERS ANIMATORS DEVELOPERS CLAN' => 'BS Information Technology',
-];
-
-// Clubs listed — all have full access
-$clubNames = [
-    'SPORTS CLUB','SCI-MATH CLUB','PEER TO PEER FACILITATOR',
-    'PEER TO PEER FACILATATOR','ENGLISH CLUB','SAMFILKO',
-    'UNITED MANGYAN STUDENTS ORGANIZATION','CAMPUS YOUTH MINISTRY IN ACTION',
 ];
 
 $normalizedOrg  = strtoupper(trim($orgName  ?? ''));
 $normalizedClub = strtoupper(trim($clubName ?? ''));
 
-$isFullAccessOrg  = in_array($normalizedOrg,  $ssgLscNames);
-$isFullAccessClub = ($myClubId !== null);   // any club → full access
+$isFullAccessOrg  = in_array($normalizedOrg, $ssgLscNames);
+$isFullAccessClub = ($myClubId !== null);
 
 if ($isFullAccessOrg || $isFullAccessClub) {
-    // SSG / LSC / any club → unrestricted
-    $allowedDepts = null;   // null means ALL
+    $allowedDepts = null;
 } elseif (isset($orgDeptMap[$normalizedOrg])) {
-    // Restricted org → only its mapped department
     $allowedDepts = [$orgDeptMap[$normalizedOrg]];
 } else {
-    // Unknown org — show all (safe default)
     $allowedDepts = null;
 }
 
-// Filter $attendanceGrouped to only allowed departments
 if ($allowedDepts !== null) {
     $attendanceGrouped = array_filter(
         $attendanceGrouped,
         fn($key) => in_array($key, $allowedDepts),
         ARRAY_FILTER_USE_KEY
     );
-    // Recompute summaryStats for the visible departments only
     $summaryStats = ['total_students'=>0,'present'=>0,'partial'=>0,'absent'=>0,'department_stats'=>[]];
     foreach ($attendanceGrouped as $deptName => $years) {
         foreach ($years as $yearLevel => $sections) {
@@ -469,7 +437,6 @@ if ($allowedDepts !== null) {
     $summaryStats['absent_pct']  = $t2 > 0 ? round(($summaryStats['absent'] /$t2)*100,1) : 0;
 }
 
-// Filter $allDepartments dropdown to only allowed departments
 if ($allowedDepts !== null) {
     $allDepartments = array_values(array_filter(
         $allDepartments,
@@ -509,9 +476,6 @@ tailwind.config = {
 .attendance-dept-section.open > div:first-child .fa-chevron-right,
 .attendance-section.open > div:first-child .fa-chevron-right{transform:rotate(90deg)}
 
-/* ── FIX: Attendance table alignment ──
-   table-layout:fixed + explicit column widths keeps every
-   column aligned regardless of content length.            */
 .att-table{table-layout:fixed;width:100%;border-collapse:collapse}
 .att-table th,.att-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
 .att-col-name  {width:22%}
@@ -521,25 +485,21 @@ tailwind.config = {
 .att-col-logout{width:14%}
 .att-col-event {width:25%}
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:99px}
 .dark ::-webkit-scrollbar-thumb{background:#374151}
 
-/* ── Animation ── */
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 .anim-up{animation:fadeUp .42s ease both}
 .d-0{animation-delay:0ms}.d-1{animation-delay:70ms}.d-2{animation-delay:140ms}.d-3{animation-delay:210ms}
 
-/* ── Sidebar ── */
 .nav-link{position:relative;transition:background .2s,color .2s}
 .nav-link::before{content:"";position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:0 4px 4px 0;background:#22c55e;transform:scaleY(0);transition:transform .25s}
 .nav-link:hover::before,.nav-link.active::before{transform:scaleY(1)}
 .nav-link.active{background:rgba(34,197,94,.12);color:#16a34a}
 .dark .nav-link.active{color:#4ade80;background:rgba(34,197,94,.15)}
 
-/* ── Cards ── */
 .card-hover{transition:transform .25s ease,box-shadow .25s ease}
 .card-hover:hover{transform:translateY(-3px);box-shadow:0 12px 24px -6px rgba(0,0,0,.1)}
 .dark .card-hover:hover{box-shadow:0 12px 24px -6px rgba(0,0,0,.4)}
@@ -547,11 +507,9 @@ tailwind.config = {
 .nav-link:hover .icon-wrap{transform:scale(1.1)}
 .chart-wrap{position:relative;height:280px;width:100%}
 
-/* ── Mobile overlay ── */
 #sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40}
 #sb-overlay.show{display:block}
 
-/* ── Chart toolbar ── */
 .ct-btn{padding:4px 12px;border-radius:8px;font-size:11px;font-weight:600;border:1px solid rgba(0,0,0,.1);color:#64748b;background:#f8fafc;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:5px}
 .dark .ct-btn{border-color:rgba(255,255,255,.1);color:#94a3b8;background:rgba(255,255,255,.05)}
 .ct-btn:hover{background:#e2e8f0;color:#1e293b}
@@ -559,7 +517,6 @@ tailwind.config = {
 .ct-btn.active{background:rgba(34,197,94,.15);border-color:#22c55e;color:#16a34a}
 .dark .ct-btn.active{background:rgba(34,197,94,.2);border-color:#22c55e;color:#4ade80}
 
-/* ── Feedback toolbar ── */
 #fbToolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 #fbSearch{flex:1;min-width:160px;padding:6px 12px;border-radius:9px;font-size:12px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1e293b;outline:none}
 .dark #fbSearch{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#e2e8f0}
@@ -606,46 +563,36 @@ tailwind.config = {
     <nav class="flex-1 overflow-y-auto p-3 space-y-1">
         <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-2 pb-1 font-semibold">Overview</p>
         <a href="/organizer/organizer_panel.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm"><i class="fas fa-gauge-high"></i></span>
-            Dashboard
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm"><i class="fas fa-gauge-high"></i></span>Dashboard
         </a>
         <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Events</p>
         <a href="/organizer/organizer_event.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
             <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm"><i class="fas fa-clipboard-list"></i></span>
             <span class="flex-1">My Events</span>
-            <?php if ($myEvents > 0): ?>
-                <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?=$myEvents?></span>
-            <?php endif; ?>
+            <?php if ($myEvents > 0): ?><span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?=$myEvents?></span><?php endif; ?>
         </a>
         <a href="/organizer/organizer_qrscan.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm"><i class="fas fa-qrcode"></i></span>
-            QR Scanner
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm"><i class="fas fa-qrcode"></i></span>QR Scanner
         </a>
         <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Tracking</p>
         <a href="/organizer/organizer_tracking.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
             <span class="icon-wrap w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 flex items-center justify-center text-sm"><i class="fas fa-users"></i></span>
             <span class="flex-1">Registrations</span>
-            <?php if ($sidebarRegistrations > 0): ?>
-                <span class="text-xs bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 px-2 py-0.5 rounded-full font-semibold"><?=$sidebarRegistrations?></span>
-            <?php endif; ?>
+            <?php if ($sidebarRegistrations > 0): ?><span class="text-xs bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-400 px-2 py-0.5 rounded-full font-semibold"><?=$sidebarRegistrations?></span><?php endif; ?>
         </a>
         <a href="/organizer/organizer_attendance.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm"><i class="fas fa-user-check"></i></span>
-            Attendance
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm"><i class="fas fa-user-check"></i></span>Attendance
         </a>
         <a href="/organizer/organizer_analytics.php" class="nav-link active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm"><i class="fas fa-chart-line"></i></span>
-            Analytics
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm"><i class="fas fa-chart-line"></i></span>Analytics
         </a>
     </nav>
     <div class="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
         <a href="/organizer/organizer_settings.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 flex items-center justify-center text-sm"><i class="fas fa-gear"></i></span>
-            Settings
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 flex items-center justify-center text-sm"><i class="fas fa-gear"></i></span>Settings
         </a>
         <a href="../includes/logout.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-            <span class="icon-wrap w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 flex items-center justify-center text-sm"><i class="fas fa-right-from-bracket"></i></span>
-            Logout
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-500 flex items-center justify-center text-sm"><i class="fas fa-right-from-bracket"></i></span>Logout
         </a>
     </div>
 </aside>
@@ -811,7 +758,6 @@ tailwind.config = {
             </select>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-            <!-- Rating summary -->
             <div class="md:col-span-2 bg-gray-50 dark:bg-gray-700/50 rounded-xl p-5 border border-gray-200 dark:border-gray-600">
                 <div class="flex items-center gap-4 mb-4">
                     <span class="text-4xl font-black text-gray-900 dark:text-white" id="overallRating"><?=round($feedback['avg_rating']??0,1)?></span>
@@ -840,7 +786,6 @@ tailwind.config = {
                     <?php endfor; ?>
                 </div>
             </div>
-            <!-- Category cards -->
             <div class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <?php
                 $catIcons =['Organization'=>'fa-bullhorn','Content'=>'fa-lightbulb','Experience'=>'fa-heart'];
@@ -867,7 +812,6 @@ tailwind.config = {
                 <?php endforeach; ?>
             </div>
         </div>
-        <!-- Feedback list -->
         <div id="fbNoResults"></div>
         <div class="space-y-3" id="feedbackList">
             <?php if(empty($feedbackList)): ?>
@@ -935,8 +879,6 @@ tailwind.config = {
 
     <!-- ═══ OVERALL ATTENDANCE REPORT ═══════════════════════ -->
     <div class="anim-up d-3 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 sm:p-6">
-
-        <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
                 <h3 class="font-semibold text-gray-900 dark:text-white text-lg">
@@ -981,7 +923,8 @@ tailwind.config = {
         <!-- Filter bar -->
         <div id="attendanceFilters" class="hidden mb-6 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-200 dark:border-gray-600">
             <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <select id="attDeptFilter" onchange="filterAttendanceTable()" class="px-3 py-2 text-sm rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 focus:border-brand-400 focus:outline-none <?= $allowedDepts !== null ? 'opacity-60 cursor-not-allowed' : '' ?>"
+                <select id="attDeptFilter" onchange="filterAttendanceTable()"
+                        class="px-3 py-2 text-sm rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 focus:border-brand-400 focus:outline-none <?= $allowedDepts !== null ? 'opacity-60 cursor-not-allowed' : '' ?>"
                         <?= $allowedDepts !== null ? 'disabled title="Your organization can only view its assigned department"' : '' ?>>
                     <option value="all"><?= $allowedDepts !== null ? htmlspecialchars($allowedDepts[0]) : 'All Departments' ?></option>
                     <?php if ($allowedDepts === null): ?>
@@ -1000,7 +943,8 @@ tailwind.config = {
                     <option value="Partial">Partial Only</option>
                     <option value="Absent">Absent Only</option>
                 </select>
-                <input type="text" id="attSearchFilter" placeholder="Search by name or student number..." onkeyup="filterAttendanceTable()"
+                <input type="text" id="attSearchFilter" placeholder="Search by name or student number..."
+                       onkeyup="filterAttendanceTable()"
                        class="px-3 py-2 text-sm rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 focus:border-brand-400 focus:outline-none">
             </div>
         </div>
@@ -1016,8 +960,6 @@ tailwind.config = {
             <?php else: ?>
                 <?php foreach($attendanceGrouped as $deptName => $years): ?>
                 <div class="attendance-dept-section mb-4" data-dept="<?=htmlspecialchars($deptName)?>">
-
-                    <!-- Dept header -->
                     <div class="flex items-center justify-between cursor-pointer select-none
                                 bg-gray-50 dark:bg-gray-700/40 rounded-xl px-4 py-3
                                 border border-gray-200 dark:border-gray-600
@@ -1035,8 +977,6 @@ tailwind.config = {
                             <span class="px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium">A: <?=$summaryStats['department_stats'][$deptName]['absent']??0?></span>
                         </div>
                     </div>
-
-                    <!-- Year/Section tree -->
                     <div class="attendance-dept-content ml-2 mt-2 hidden">
                         <?php foreach($years as $yearLevel => $sections): ?>
                         <div class="att-year-group mb-3" data-year="<?=htmlspecialchars($yearLevel)?>">
@@ -1046,8 +986,6 @@ tailwind.config = {
                             </div>
                             <?php foreach($sections as $sectionName => $sectionData): ?>
                             <div class="attendance-section mb-3 ml-4" data-section="<?=htmlspecialchars($sectionName)?>">
-
-                                <!-- Section header -->
                                 <div class="flex items-center gap-2 cursor-pointer select-none
                                             bg-white dark:bg-gray-800 rounded-lg px-3 py-2 mb-1
                                             border border-gray-200 dark:border-gray-700
@@ -1063,8 +1001,6 @@ tailwind.config = {
                                         <span class="px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"><?=$sectionData['stats']['absent']?>A</span>
                                     </div>
                                 </div>
-
-                                <!-- ══ FIX: proper </tr> closing tag (was </table>) + att-table class ══ -->
                                 <div class="attendance-section-content ml-2 hidden overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
                                     <table class="att-table">
                                         <thead class="bg-gray-100 dark:bg-gray-700">
@@ -1127,7 +1063,9 @@ tailwind.config = {
     <i class="fas fa-chevron-up text-sm group-hover:-translate-y-0.5 transition-transform"></i>
 </button>
 
-<!-- PHP → JS bridge -->
+<!-- ═══════════════════════════════════════════════════════
+     PHP → JS DATA BRIDGE  (must come before the external script)
+     ═══════════════════════════════════════════════════════ -->
 <script>
 const SEMS_ANALYTICS_DATA = {
     months:        <?=json_encode($months)?>,
@@ -1137,316 +1075,14 @@ const SEMS_ANALYTICS_DATA = {
     eventAttend:   <?=json_encode($eventAttend)?>,
     deptNames:     <?=json_encode($deptNames)?>,
     deptCounts:    <?=json_encode($deptCounts)?>,
-    deptColors:    <?=json_encode(array_slice($deptColors,0,count($deptNames)))?>,
+    deptColors:    <?=json_encode(array_slice($deptColors, 0, count($deptNames)))?>,
     showDeptChart: <?=json_encode($showDeptChart)?>,
-    // null = unrestricted; array of strings = only these departments are visible
-    allowedDepts:  <?=json_encode($allowedDepts)?>,
+    allowedDepts:  <?=json_encode($allowedDepts)?>,   // null = all; string[] = restricted
 };
 </script>
 
-<script>
-/* ================================================================
-   SEMS Analytics JS — Theme · Sidebar · Charts · Attendance · Feedback
-   ================================================================ */
+<!-- External analytics script — all behaviour lives here -->
+<script src="/js/organizer_analytics.js"></script>
 
-var _d          = (typeof SEMS_ANALYTICS_DATA!=='undefined')?SEMS_ANALYTICS_DATA:{};
-var months      = _d.months      ||[];
-var regCounts   = _d.regCounts   ||[];
-var eventTitles = _d.eventTitles ||[];
-var eventRegs   = _d.eventRegs   ||[];
-var eventAttend = _d.eventAttend ||[];
-var deptNames   = _d.deptNames   ||[];
-var deptCounts  = _d.deptCounts  ||[];
-var deptColors  = _d.deptColors  ||[];
-var showDeptChart=(_d.showDeptChart===true);
-// null = all depts allowed; array = restricted list
-var allowedDepts = _d.allowedDepts || null;
-
-/* ── Theme ── */
-var html=document.documentElement,themeIcon=document.getElementById('themeIcon');
-function applyTheme(d){d?html.classList.add('dark'):html.classList.remove('dark');if(themeIcon)themeIcon.className=d?'fas fa-sun text-sm':'fas fa-moon text-sm';}
-function toggleTheme(){var d=!html.classList.contains('dark');localStorage.setItem('theme',d?'dark':'light');applyTheme(d);setTimeout(initCharts,50);}
-(function(){var s=localStorage.getItem('theme');if(s==='dark'||(!s&&window.matchMedia('(prefers-color-scheme:dark)').matches))applyTheme(true);})();
-
-/* ── Sidebar ── */
-var sidebar=document.getElementById('sidebar'),sbOverlay=document.getElementById('sb-overlay');
-function openSidebar(){sidebar.classList.remove('-translate-x-full');sbOverlay.classList.add('show');}
-function closeSidebar(){sidebar.classList.add('-translate-x-full');sbOverlay.classList.remove('show');}
-
-/* ── Charts ── */
-var registrationChart=null,performanceChart=null,departmentChart=null;
-function chartTheme(){var d=html.classList.contains('dark');return{text:d?'#9ca3af':'#6b7280',grid:d?'rgba(255,255,255,.07)':'rgba(0,0,0,.06)',tipBg:d?'#1f2937':'#ffffff',tipFg:d?'#f3f4f6':'#111827'};}
-
-function initCharts(){
-    var c=chartTheme();
-    if(registrationChart){registrationChart.destroy();registrationChart=null;}
-    if(performanceChart){performanceChart.destroy();performanceChart=null;}
-    if(departmentChart){departmentChart.destroy();departmentChart=null;}
-
-    var rc=document.getElementById('registrationChart');
-    if(rc){registrationChart=new Chart(rc.getContext('2d'),{type:'line',data:{labels:months,datasets:[{label:'Registrations',data:regCounts,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.12)',tension:.4,fill:true,pointBackgroundColor:'#22c55e',pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:4,pointHoverRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,padding:16,font:{size:11},color:c.text}},tooltip:{backgroundColor:c.tipBg,titleColor:c.tipFg,bodyColor:c.text,cornerRadius:10,padding:10}},scales:{y:{beginAtZero:true,grid:{color:c.grid},ticks:{color:c.text},border:{display:false}},x:{grid:{display:false},ticks:{color:c.text}}}}});}
-
-    var pc=document.getElementById('performanceChart');
-    if(pc){performanceChart=new Chart(pc.getContext('2d'),{type:'bar',data:{labels:eventTitles,datasets:[{label:'Registrations',data:eventRegs,backgroundColor:'#22c55e',borderRadius:5,barPercentage:.55,categoryPercentage:.75},{label:'Attendance',data:eventAttend,backgroundColor:'#3b82f6',borderRadius:5,barPercentage:.55,categoryPercentage:.75}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,padding:16,font:{size:11},color:c.text}},tooltip:{backgroundColor:c.tipBg,titleColor:c.tipFg,bodyColor:c.text,cornerRadius:10,padding:10}},sectors:{y:{grid:{display:false},ticks:{color:c.text,font:{size:11},callback:function(v){var l=performanceChart&&performanceChart.data.labels[v];return l&&l.length>18?l.slice(0,18)+'…':l;}}},x:{beginAtZero:true,grid:{color:c.grid},ticks:{color:c.text,precision:0},border:{display:false}}},scales:{y:{grid:{display:false},ticks:{color:c.text,font:{size:11},callback:function(v){var l=performanceChart&&performanceChart.data.labels[v];return l&&l.length>18?l.slice(0,18)+'…':l;}}},x:{beginAtZero:true,grid:{color:c.grid},ticks:{color:c.text,precision:0},border:{display:false}}}}});}
-
-    var dc=document.getElementById('departmentChart');
-    if(dc&&showDeptChart){departmentChart=new Chart(dc.getContext('2d'),{type:'doughnut',data:{labels:deptNames,datasets:[{data:deptCounts,backgroundColor:deptColors,borderWidth:0,hoverOffset:4}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:true,position:'right',labels:{color:c.text,font:{size:11},usePointStyle:true}},tooltip:{backgroundColor:c.tipBg,titleColor:c.tipFg,bodyColor:c.text,cornerRadius:10,padding:10}}}});}
-
-    buildRegToolbar();buildPerfToolbar();
-}
-
-/* ── Toolbars ── */
-function buildRegToolbar(){
-    var tb=document.getElementById('regToolbar'),dlBtn=document.getElementById('dlRegBtn');
-    if(!tb)return; tb.innerHTML='';
-    if(dlBtn)dlBtn.onclick=function(){dlChart(registrationChart,'registration-trends');};
-    var cur=(document.getElementById('dateFilter')||{}).value||'30days';
-    [{l:'7D',v:'7days'},{l:'30D',v:'30days'},{l:'3M',v:'90days'},{l:'Year',v:'year'},{l:'All',v:'all'}].forEach(function(r){
-        var b=document.createElement('button');b.className='ct-btn'+(r.v===cur?' active':'');b.textContent=r.l;
-        b.onclick=function(){var df=document.getElementById('dateFilter');if(df){df.value=r.v;document.getElementById('analyticsFilterForm').submit();}};
-        tb.appendChild(b);
-    });
-    var sep=document.createElement('span');sep.style.cssText='width:1px;height:18px;background:rgba(0,0,0,.1);margin:0 2px;';tb.appendChild(sep);
-    var lBtn=document.createElement('button');lBtn.className='ct-btn active';lBtn.innerHTML='<i class="fas fa-chart-line"></i>';
-    var bBtn=document.createElement('button');bBtn.className='ct-btn';bBtn.innerHTML='<i class="fas fa-chart-bar"></i>';
-    lBtn.onclick=function(){setRegType('line');lBtn.className='ct-btn active';bBtn.className='ct-btn';};
-    bBtn.onclick=function(){setRegType('bar');bBtn.className='ct-btn active';lBtn.className='ct-btn';};
-    tb.appendChild(lBtn);tb.appendChild(bBtn);
-}
-function setRegType(t){if(!registrationChart)return;registrationChart.config.type=t;registrationChart.data.datasets[0].fill=(t==='line');registrationChart.data.datasets[0].backgroundColor=t==='line'?'rgba(34,197,94,.12)':'rgba(34,197,94,.75)';registrationChart.update();}
-function buildPerfToolbar(){
-    var tb=document.getElementById('perfToolbar'),dlBtn=document.getElementById('dlPerfBtn');
-    if(!tb)return; tb.innerHTML='';
-    if(dlBtn)dlBtn.onclick=function(){dlChart(performanceChart,'event-performance');};
-    var rL=((performanceChart&&performanceChart.data.labels)||[]).slice();
-    var rR=((performanceChart&&performanceChart.data.datasets[0]&&performanceChart.data.datasets[0].data)||[]).slice();
-    var rA=((performanceChart&&performanceChart.data.datasets[1]&&performanceChart.data.datasets[1].data)||[]).slice();
-    var rs=document.createElement('button');rs.className='ct-btn active';rs.innerHTML='<i class="fas fa-sort-amount-down"></i> By Reg';
-    var as=document.createElement('button');as.className='ct-btn';as.innerHTML='<i class="fas fa-sort-amount-down"></i> By Att';
-    function sortPerf(by){rs.className='ct-btn'+(by==='reg'?' active':'');as.className='ct-btn'+(by==='att'?' active':'');var idx=rL.map(function(_,i){return i;}).sort(function(a,b){return by==='reg'?rR[b]-rR[a]:rA[b]-rA[a];});performanceChart.data.labels=idx.map(function(i){return rL[i];});performanceChart.data.datasets[0].data=idx.map(function(i){return rR[i];});performanceChart.data.datasets[1].data=idx.map(function(i){return rA[i];});performanceChart.update();}
-    rs.onclick=function(){sortPerf('reg');};as.onclick=function(){sortPerf('att');};
-    tb.appendChild(rs);tb.appendChild(as);
-}
-function dlChart(ch,name){if(!ch)return;var a=document.createElement('a');a.download=name+'-'+new Date().toISOString().slice(0,10)+'.png';a.href=ch.canvas.toDataURL('image/png');a.click();}
-
-/* ══════════════════════════════════════════════════════════════
-   ATTENDANCE — accordion toggles
-   ══════════════════════════════════════════════════════════════ */
-function toggleDeptSection(hdr){
-    var ds=hdr.closest('.attendance-dept-section'),c=ds.querySelector('.attendance-dept-content'),open=ds.classList.contains('open');
-    if(open){c.classList.add('hidden');c.classList.remove('!block');ds.classList.remove('open');}
-    else{c.classList.remove('hidden');c.classList.add('!block');ds.classList.add('open');}
-}
-function toggleSection(hdr){
-    var sec=hdr.closest('.attendance-section'),c=sec.querySelector('.attendance-section-content'),open=sec.classList.contains('open');
-    if(open){c.classList.add('hidden');c.classList.remove('!block');sec.classList.remove('open');}
-    else{c.classList.remove('hidden');c.classList.add('!block');sec.classList.add('open');}
-}
-function toggleAttendanceFilters(){
-    var bar=document.getElementById('attendanceFilters');
-    if(bar.classList.contains('hidden')){bar.classList.remove('hidden');}
-    else{bar.classList.add('hidden');
-        document.getElementById('attDeptFilter').value='all';
-        document.getElementById('attYearFilter').value='all';
-        document.getElementById('attStatusFilter').value='all';
-        document.getElementById('attSearchFilter').value='';
-        filterAttendanceTable();}
-}
-
-/* ── FIX B: filterAttendanceTable
-   Bug was: [data-year] matched both year-group <div>s AND <tr> rows
-   (rows also carry data-year). Iterating over <tr>s found 0 nested
-   .attendance-row children → set display:none on every row → blank table.
-   Fix: target only .att-year-group divs, never the <tr> rows.
-   Also enforces allowedDepts visibility restriction.                  ── */
-function filterAttendanceTable(){
-    var dF = (document.getElementById('attDeptFilter')   || {value:'all'}).value;
-    var yF = (document.getElementById('attYearFilter')   || {value:'all'}).value;
-    var sF = (document.getElementById('attStatusFilter') || {value:'all'}).value;
-    var q  = ((document.getElementById('attSearchFilter') || {value:''}).value || '').toLowerCase().trim();
-
-    /* Step 1 — show / hide individual rows */
-    document.querySelectorAll('.attendance-row').forEach(function(row) {
-        var show = true;
-        // Enforce org-level dept restriction (server already filtered HTML,
-        // but also enforce in JS in case of any DOM manipulation)
-        if (allowedDepts !== null && allowedDepts.indexOf(row.dataset.department) === -1) show = false;
-        if (show && dF !== 'all' && row.dataset.department !== dF) show = false;
-        if (show && yF !== 'all' && row.dataset.year       !== yF) show = false;
-        if (show && sF !== 'all' && row.dataset.status     !== sF) show = false;
-        if (show && q) {
-            var name = (row.dataset.name          || '');
-            var num  = (row.dataset.studentNumber || '').toLowerCase();
-            if (!name.includes(q) && !num.includes(q)) show = false;
-        }
-        row.style.display = show ? '' : 'none';
-    });
-
-    /* Step 2 — section containers: hide empty, expand those with matches */
-    document.querySelectorAll('.attendance-section').forEach(function(sec) {
-        var vis = Array.from(sec.querySelectorAll('.attendance-row'))
-                       .filter(function(r) { return r.style.display !== 'none'; });
-        if (vis.length === 0) {
-            sec.style.display = 'none';
-        } else {
-            sec.style.display = '';
-            var c = sec.querySelector('.attendance-section-content');
-            if (c) { c.classList.remove('hidden'); c.classList.add('!block'); sec.classList.add('open'); }
-        }
-    });
-
-    /* Step 3 — year-group divs only (.att-year-group), NOT the <tr> rows */
-    document.querySelectorAll('.att-year-group').forEach(function(yg) {
-        var vis = Array.from(yg.querySelectorAll('.attendance-row'))
-                       .filter(function(r) { return r.style.display !== 'none'; });
-        yg.style.display = vis.length === 0 ? 'none' : '';
-    });
-
-    /* Step 4 — dept sections: hide empty, expand those with matches */
-    document.querySelectorAll('.attendance-dept-section').forEach(function(ds) {
-        var vis = Array.from(ds.querySelectorAll('.attendance-row'))
-                       .filter(function(r) { return r.style.display !== 'none'; });
-        if (vis.length === 0) {
-            ds.style.display = 'none';
-        } else {
-            ds.style.display = '';
-            var c = ds.querySelector('.attendance-dept-content');
-            if (c) { c.classList.remove('hidden'); c.classList.add('!block'); ds.classList.add('open'); }
-        }
-    });
-}
-
-/* ── FIX C: exportAttendanceToCSV — reads filter inputs, not style.display
-   Also enforces allowedDepts so restricted orgs can't export other depts ── */
-function exportAttendanceToCSV(){
-    var allRows=document.querySelectorAll('.attendance-row');
-    if(allRows.length===0){alert('No attendance data available.');return;}
-
-    var bar=document.getElementById('attendanceFilters'),filtersOpen=bar&&!bar.classList.contains('hidden');
-    var dF=filtersOpen?(document.getElementById('attDeptFilter')  ||{value:'all'}).value:'all';
-    var yF=filtersOpen?(document.getElementById('attYearFilter')  ||{value:'all'}).value:'all';
-    var sF=filtersOpen?(document.getElementById('attStatusFilter')||{value:'all'}).value:'all';
-    var rawQ=filtersOpen?((document.getElementById('attSearchFilter')||{value:''}).value||''):'';
-    var q=rawQ.toLowerCase().trim();
-
-    var rows=Array.from(allRows).filter(function(row){
-        // Org-level dept restriction
-        if(allowedDepts!==null&&allowedDepts.indexOf(row.dataset.department)===-1)return false;
-        if(dF!=='all'&&row.dataset.department!==dF)return false;
-        if(yF!=='all'&&row.dataset.year!==yF)return false;
-        if(sF!=='all'&&row.dataset.status!==sF)return false;
-        if(q){var n=(row.dataset.name||''),num=(row.dataset.studentNumber||'').toLowerCase();if(!n.includes(q)&&!num.includes(q))return false;}
-        return true;
-    });
-
-    if(rows.length===0){alert('No data to export. Please adjust your filters.');return;}
-
-    var headers=['Department','Year Level','Section','Student Name','Student Number','Status','Login Time','Logout Time','Event'];
-    var csv=[headers];
-    rows.forEach(function(row){
-        var c=row.querySelectorAll('td'),g=function(i){return c[i]?c[i].textContent.trim().replace(/\u2014|—/g,''):'';};
-        csv.push([row.dataset.department||'',row.dataset.year||'',row.dataset.section||'',g(0),g(1),g(2),g(3),g(4),g(5)]);
-    });
-
-    var content=csv.map(function(r){return r.map(function(cell){return'"'+String(cell).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
-    var blob=new Blob(['\uFEFF'+content],{type:'text/csv;charset=utf-8;'});
-    var url=URL.createObjectURL(blob);
-    var a=document.createElement('a');
-    a.href=url;a.download='attendance_report_'+new Date().toISOString().slice(0,19).replace(/:/g,'-')+'.csv';
-    a.style.visibility='hidden';document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-}
-
-/* ══════════════════════════════════════════════════════════════
-   FEEDBACK — search / filter / sort / paginate
-   ══════════════════════════════════════════════════════════════ */
-function loadFeedback(){if(typeof applyFbFilters==='function')applyFbFilters();}
-
-document.addEventListener('DOMContentLoaded',function(){
-    initCharts();
-
-    /* Auto-expand first dept */
-    var fd=document.querySelector('.attendance-dept-section');
-    if(fd){var h=fd.querySelector('.flex.items-center.justify-between.cursor-pointer');if(h)toggleDeptSection(h);}
-
-    /* Feedback setup */
-    var fs=document.getElementById('feedbackList');
-    if(!fs||fs.children.length===0)return;
-    var allCards=Array.from(fs.children);
-    allCards.forEach(function(card){
-        var fi=card.querySelectorAll('.fa-star:not(.fa-star-half-alt)').length,ha=card.querySelectorAll('.fa-star-half-alt').length;
-        card.dataset.rating=String(fi+(ha?.5:0));
-        var sp=card.querySelectorAll('.text-xs.text-gray-400 span');
-        card.dataset.evTitle=sp[0]?sp[0].textContent.trim().toLowerCase():'';
-    });
-
-    var tb=document.createElement('div');tb.id='fbToolbar';
-    var fbs=document.createElement('input');fbs.id='fbSearch';fbs.type='text';fbs.placeholder='Search by name or comment…';
-    var fbr=document.createElement('select');fbr.id='fbRatingFilter';fbr.innerHTML='<option value="all">All Ratings</option><option value="5">5★ only</option><option value="4">4+★</option><option value="3">3+★</option><option value="2">2+★</option>';
-    var fbs2=document.createElement('select');fbs2.id='fbSortSelect';fbs2.innerHTML='<option value="newest">Newest First</option><option value="oldest">Oldest First</option><option value="highest">Highest Rating</option><option value="lowest">Lowest Rating</option>';
-    tb.appendChild(fbs);tb.appendChild(fbr);tb.appendChild(fbs2);
-    var nr=document.getElementById('fbNoResults');if(nr)nr.innerHTML='<i class="fas fa-search" style="font-size:20px;display:block;margin-bottom:8px;color:#9ca3af"></i>No feedback matches your filters.';
-    if(fs.parentElement)fs.parentElement.insertBefore(tb,fs);
-
-    var PER=4,page=0,visible=allCards.slice();
-    var pag=document.createElement('div');pag.className='fb-pagination';
-    var prev=document.createElement('button');prev.className='fb-pg-btn';prev.innerHTML='<i class="fas fa-chevron-left"></i> Prev';
-    var pgi=document.createElement('span');pgi.className='fb-pg-info';
-    var next=document.createElement('button');next.className='fb-pg-btn';next.innerHTML='Next <i class="fas fa-chevron-right"></i>';
-    pag.appendChild(prev);pag.appendChild(pgi);pag.appendChild(next);
-    if(fs.parentElement)fs.parentElement.appendChild(pag);
-
-    function renderPage(){
-        var total=Math.max(1,Math.ceil(visible.length/PER));
-        if(page>=total)page=total-1;if(page<0)page=0;
-        allCards.forEach(function(c){c.style.display='none';});
-        visible.forEach(function(c,i){c.style.display=(i>=page*PER&&i<(page+1)*PER)?'':'none';});
-        prev.disabled=page===0;next.disabled=page>=total-1;
-        pgi.textContent=visible.length>0?'Page '+(page+1)+' of '+total+'  ('+visible.length+' review'+(visible.length!==1?'s':'')+')':'';
-        if(nr)nr.style.display=visible.length===0?'block':'none';
-        pag.style.display=visible.length===0?'none':'flex';
-    }
-    prev.onclick=function(){page--;renderPage();};next.onclick=function(){page++;renderPage();};
-
-    window.applyFbFilters=function(){
-        page=0;
-        var q=fbs.value.toLowerCase().trim(),minR=parseFloat(fbr.value)||0;
-        var evSel=document.getElementById('feedbackEventFilter').value,evT=evSel==='all'?'':evSel;
-        var sort=fbs2.value;
-        var filtered=allCards.filter(function(c){
-            var text=(c.textContent||'').toLowerCase(),rat=parseFloat(c.dataset.rating)||0,ev=c.dataset.evTitle||'';
-            if(q&&!text.includes(q))return false;
-            if(fbr.value!=='all'){if(fbr.value==='5'?rat<5:rat<minR)return false;}
-            if(evT&&!ev.includes(evT.toLowerCase()))return false;
-            return true;
-        });
-        filtered.sort(function(a,b){
-            if(sort==='highest')return parseFloat(b.dataset.rating)-parseFloat(a.dataset.rating);
-            if(sort==='lowest') return parseFloat(a.dataset.rating)-parseFloat(b.dataset.rating);
-            var ai=allCards.indexOf(a),bi=allCards.indexOf(b);return sort==='oldest'?bi-ai:ai-bi;
-        });
-        visible=filtered;filtered.forEach(function(c){if(fs)fs.appendChild(c);});
-        updateRatingSummary(filtered);renderPage();
-    };
-
-    function updateRatingSummary(cards){
-        var total=cards.length,dist={1:0,2:0,3:0,4:0,5:0},sum=0;
-        cards.forEach(function(c){var r=parseFloat(c.dataset.rating)||0;sum+=r;var rr=Math.round(r);if(rr>=1&&rr<=5)dist[rr]++;});
-        var avg=total>0?Math.round((sum/total)*10)/10:0;
-        var orEl=document.getElementById('overallRating');if(orEl)orEl.textContent=avg.toFixed(1);
-        var osEl=document.getElementById('overallStars');
-        if(osEl){var h='';for(var i=1;i<=5;i++){if(i<=Math.floor(avg))h+='<i class="fas fa-star text-sm"></i>';else if(i-.5<=avg)h+='<i class="fas fa-star-half-alt text-sm"></i>';else h+='<i class="far fa-star text-sm text-gray-300 dark:text-gray-600"></i>';}osEl.innerHTML=h;}
-        var rcEl=document.getElementById('reviewCount');if(rcEl)rcEl.textContent='Based on '+total+' review'+(total!==1?'s':'');
-        var bars=document.querySelectorAll('#ratingBars > div');
-        bars.forEach(function(row,idx){var star=5-idx,pct=total>0?Math.round((dist[star]/total)*100):0;var bar=row.querySelector('.h-full.rounded-full'),span=row.querySelectorAll('span')[1];if(bar)bar.style.width=pct+'%';if(span)span.textContent=pct+'%';});
-    }
-
-    fbs.addEventListener('input',window.applyFbFilters);fbr.addEventListener('change',window.applyFbFilters);fbs2.addEventListener('change',window.applyFbFilters);
-    var fbef=document.getElementById('feedbackEventFilter');if(fbef)fbef.addEventListener('change',window.applyFbFilters);
-
-    function wrapIcon(id,cls){var el=document.getElementById(id);if(!el||el.parentElement.classList.contains('fb-filter-group'))return;var g=document.createElement('div');g.className='fb-filter-group';var ic=document.createElement('i');ic.className='fas '+cls+' fb-filter-icon';el.parentNode.insertBefore(g,el);g.appendChild(ic);g.appendChild(el);}
-    wrapIcon('fbRatingFilter','fa-star');wrapIcon('fbSortSelect','fa-sort-amount-down');
-    window.applyFbFilters();
-});
-</script>
 </body>
 </html>
