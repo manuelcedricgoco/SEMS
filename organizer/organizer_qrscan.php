@@ -584,7 +584,7 @@ unset($ev);
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm">
                     <i class="fas fa-clipboard-list"></i>
                 </span>
-                <span class="flex-1">My Events</span>
+                <span class="flex-1">Events  & Announcements</span>
                 <?php if ($myEvents > 0): ?>
                     <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span>
                 <?php endif; ?>
@@ -1164,8 +1164,7 @@ unset($ev);
                         <!-- Preview state (shown after capture) -->
                         <div id="manualProofPreview" class="hidden text-center py-2 px-3">
                             <img id="manualProofImg"
-                                class="max-h-20 mx-auto rounded-lg ring-2"
-                                style="ring-color:rgba(34,197,94,.4);"
+                                class="max-h-20 mx-auto rounded-lg ring-2 ring-[rgba(34,197,94,0.4)]"
                                 alt="Proof photo">
                             <p class="text-[10px] mt-1.5 font-semibold" style="color:rgba(34,197,94,.8);">
                                 <i class="fas fa-check-circle mr-1"></i> Photo captured

@@ -770,7 +770,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <p class="text-[10px] uppercase tracking-widest text-gray-400 px-3 pt-4 pb-1 font-semibold">Events</p>
             <a href="/organizer/organizer_event.php" class="nav-link active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm"><i class="fas fa-clipboard-list"></i></span>
-                <span class="flex-1">My Events</span>
+                <span class="flex-1">Events  & Announcements</span>
                 <?php if ($myEvents>0): ?><span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span><?php endif; ?>
             </a>
             <a href="/organizer/organizer_qrscan.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">

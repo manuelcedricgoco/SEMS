@@ -23,6 +23,26 @@ if (!$archivedRow || !empty($archivedRow['deleted_at'])) {
     exit();
 }
 
+// ── ORG/CLUB ARCHIVED GUARD ──────────────────────────────────
+$orgClubArchivedCheck = $pdo->prepare("
+    SELECT
+        o.deleted_at AS org_deleted,
+        c.deleted_at AS club_deleted
+    FROM users u
+    LEFT JOIN organizations o ON u.org_id  = o.org_id
+    LEFT JOIN clubs         c ON u.club_id = c.club_id
+    WHERE u.user_id = ?
+    LIMIT 1
+");
+$orgClubArchivedCheck->execute([$_SESSION['user_id']]);
+$orgClubRow = $orgClubArchivedCheck->fetch(PDO::FETCH_ASSOC);
+
+if ($orgClubRow && (!empty($orgClubRow['org_deleted']) || !empty($orgClubRow['club_deleted']))) {
+    session_destroy();
+    header("Location: ../includes/auth.php?error=org_archived");
+    exit();
+}
+
 $uid = (int) $_SESSION['user_id'];
 
 
@@ -408,7 +428,7 @@ $annCount      = count($announcements);
             <span class="icon-wrap w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm">
                 <i class="fas fa-calendar-alt"></i>
             </span>
-            <span class="flex-1">My Events</span>
+            <span class="flex-1">Events  & Announcements</span>
             <?php if ($myEvents > 0): ?>
                 <span class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span>
             <?php endif; ?>

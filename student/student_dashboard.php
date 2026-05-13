@@ -21,6 +21,26 @@ if (!$archivedRow || !empty($archivedRow['deleted_at'])) {
     exit();
 }
 
+// ── ORG/CLUB ARCHIVED GUARD ──────────────────────────────────
+$orgClubArchivedCheck = $pdo->prepare("
+    SELECT
+        o.deleted_at AS org_deleted,
+        c.deleted_at AS club_deleted
+    FROM users u
+    LEFT JOIN organizations o ON u.org_id  = o.org_id
+    LEFT JOIN clubs         c ON u.club_id = c.club_id
+    WHERE u.user_id = ?
+    LIMIT 1
+");
+$orgClubArchivedCheck->execute([$_SESSION['user_id']]);
+$orgClubRow = $orgClubArchivedCheck->fetch(PDO::FETCH_ASSOC);
+
+if ($orgClubRow && (!empty($orgClubRow['org_deleted']) || !empty($orgClubRow['club_deleted']))) {
+    session_destroy();
+    header("Location: ../includes/auth.php?error=org_archived");
+    exit();
+}
+
 $uid = (int) $_SESSION['user_id'];
 $now = date('Y-m-d H:i:s');
 

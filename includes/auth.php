@@ -38,6 +38,9 @@ if (isset($_GET['error'])) {
     } elseif ($_GET['error'] === 'unauthorized') {
         $message      = "You do not have permission to access that page.";
         $message_type = "error";
+    } elseif ($_GET['error'] === 'org_archived') {
+        $message      = "Your organization or club has been archived by the administrator. You have been signed out. Please contact your admin for assistance.";
+        $message_type = "error";
     }
 }
 

@@ -559,7 +559,7 @@ $rateLimited = $attempts >= 3 && $timeLeft > 0;
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm">
                     <i class="fas fa-clipboard-list"></i>
                 </span>
-                <span class="flex-1">My Events</span>
+                <span class="flex-1">Events  & Announcements</span>
                 <?php if ($myEvents > 0): ?>
                     <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span>
                 <?php endif; ?>
