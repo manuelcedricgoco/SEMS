@@ -567,37 +567,66 @@ $reqGenJson         = json_encode($reqGenData,         JSON_HEX_TAG | JSON_HEX_A
 
                 </div>
 
-                <!-- ── REQUIRED VS GENERAL ── -->
-                <div class="stat-card bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
-                    <div class="flex flex-col sm:flex-row sm:items-start gap-4 mb-6">
-                        <div class="flex-1">
-                            <h3 class="text-base font-bold text-slate-900 dark:text-white">Required vs General Events</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                <span class="inline-flex items-center gap-1 mr-3">
-                                    <i class="fas fa-lock text-rose-400 text-[10px]"></i>
-                                    Required — restricted events (is_restricted = 1)
-                                </span>
-                                <span class="inline-flex items-center gap-1">
-                                    <i class="fas fa-unlock text-emerald-400 text-[10px]"></i>
-                                    General — open/voluntary for all students
-                                </span>
-                            </p>
-                        </div>
-                        <div class="flex gap-3 flex-shrink-0">
-                            <div class="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800 text-center">
-                                <p class="text-xs text-rose-500 dark:text-rose-400 font-semibold">Required</p>
-                                <p class="text-xl font-bold text-rose-600 dark:text-rose-400"><?= $reqGenData['required'] ?></p>
-                            </div>
-                            <div class="px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 text-center">
-                                <p class="text-xs text-emerald-500 dark:text-emerald-400 font-semibold">General</p>
-                                <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400"><?= $reqGenData['general'] ?></p>
-                            </div>
-                        </div>
+                <!-- ── REQUIRED VS GENERAL + RECENT ACTIVITY ── -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Required vs General -->
+    <div class="stat-card bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
+        <div class="flex flex-col sm:flex-row sm:items-start gap-4 mb-6">
+            <div class="flex-1">
+                <h3 class="text-base font-bold text-slate-900 dark:text-white">Required vs General Events</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <span class="inline-flex items-center gap-1 mr-3">
+                        <i class="fas fa-lock text-rose-400 text-[10px]"></i>
+                        Required — restricted events (is_restricted = 1)
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                        <i class="fas fa-unlock text-emerald-400 text-[10px]"></i>
+                        General — open/voluntary for all students
+                    </span>
+                </p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 flex-shrink-0">
+                <div class="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800 text-center">
+                    <p class="text-xs text-rose-500 dark:text-rose-400 font-semibold">Required</p>
+                    <p class="text-xl font-bold text-rose-600 dark:text-rose-400"><?= $reqGenData['required'] ?></p>
+                </div>
+                <div class="px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 text-center">
+                    <p class="text-xs text-emerald-500 dark:text-emerald-400 font-semibold">General</p>
+                    <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400"><?= $reqGenData['general'] ?></p>
+                </div>
+            </div>
+        </div>
+        <div class="chart-container" style="height:200px;">
+            <canvas id="reqGenChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6">
+        <p class="font-bold text-slate-900 dark:text-white text-lg mb-6">Recent Activity</p>
+        <div class="relative pl-4 space-y-6 before:absolute before:inset-y-0 before:left-[11px] before:w-0.5 before:bg-gray-100 dark:before:bg-slate-700">
+            <?php foreach ($recentActivities as $activity):
+                $timeAgo       = (new DateTime($activity['date']))->diff(new DateTime());
+                $formattedTime = $timeAgo->d > 0 ? $timeAgo->d . 'd ago' : ($timeAgo->h > 0 ? $timeAgo->h . 'h ago' : 'Just now');
+            ?>
+                <div class="relative flex gap-4 items-start">
+                    <div class="absolute -left-[25px] w-6 h-6 rounded-full bg-white dark:bg-slate-800 border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-sm">
+                        <i class="fas <?= $activity['icon'] ?> text-xs <?= $activity['color'] ?>"></i>
                     </div>
-                    <div class="chart-container" style="height:200px;">
-                        <canvas id="reqGenChart"></canvas>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-slate-900 dark:text-white truncate"><?= htmlspecialchars($activity['action']) ?></p>
+                        <?php if ($activity['details']): ?>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate"><?= htmlspecialchars($activity['details']) ?></p>
+                        <?php endif; ?>
+                        <span class="text-xs font-semibold text-slate-400 block mt-1"><?= $formattedTime ?></span>
                     </div>
                 </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+</div>
 
                 <!-- ── BOTTOM SECTION ── -->
                 <div class="flex flex-col gap-6">
@@ -631,31 +660,6 @@ $reqGenJson         = json_encode($reqGenData,         JSON_HEX_TAG | JSON_HEX_A
                             </table>
                         </div>
                     </div>
-
-                    <!-- Recent Activity -->
-                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6">
-                        <p class="font-bold text-slate-900 dark:text-white text-lg mb-6">Recent Activity</p>
-                        <div class="relative pl-4 space-y-6 before:absolute before:inset-y-0 before:left-[11px] before:w-0.5 before:bg-gray-100 dark:before:bg-slate-700">
-                            <?php foreach ($recentActivities as $activity):
-                                $timeAgo       = (new DateTime($activity['date']))->diff(new DateTime());
-                                $formattedTime = $timeAgo->d > 0 ? $timeAgo->d . 'd ago' : ($timeAgo->h > 0 ? $timeAgo->h . 'h ago' : 'Just now');
-                            ?>
-                                <div class="relative flex gap-4 items-start">
-                                    <div class="absolute -left-[25px] w-6 h-6 rounded-full bg-white dark:bg-slate-800 border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-sm">
-                                        <i class="fas <?= $activity['icon'] ?> text-xs <?= $activity['color'] ?>"></i>
-                                    </div>
-                                    <div class="min-w-0">
-                                        <p class="text-sm font-bold text-slate-900 dark:text-white truncate"><?= htmlspecialchars($activity['action']) ?></p>
-                                        <?php if ($activity['details']): ?>
-                                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate"><?= htmlspecialchars($activity['details']) ?></p>
-                                        <?php endif; ?>
-                                        <span class="text-xs font-semibold text-slate-400 block mt-1"><?= $formattedTime ?></span>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
                 </div>
 
                 <div class="h-4"></div>
