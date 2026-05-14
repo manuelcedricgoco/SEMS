@@ -17,193 +17,283 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $currentAdminId = (int) $_SESSION['user_id'];
  
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── ARCHIVE EVENT HANDLER (replaces hard-delete) ──
-// Purpose: Soft-delete by setting deleted_at + deleted_by instead of removing
-//          the row. The event becomes "archived" and can be restored later.
+// ── ARCHIVE EVENT HANDLER ──
 // ═══════════════════════════════════════════════════════════════════════════════
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_event_id'])) {
     header('Content-Type: application/json');
- 
     $event_id = intval($_POST['archive_event_id']);
- 
-    if ($event_id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Invalid event ID.']);
-        exit();
-    }
- 
+    if ($event_id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid event ID.']); exit(); }
     try {
-        $stmt = $pdo->prepare("
-            UPDATE events
-            SET deleted_at = NOW(),
-                deleted_by = :admin_id
-            WHERE event_id  = :event_id
-              AND deleted_at IS NULL
-        ");
+        $stmt = $pdo->prepare("UPDATE events SET deleted_at = NOW(), deleted_by = :admin_id WHERE event_id = :event_id AND deleted_at IS NULL");
         $stmt->execute([':admin_id' => $currentAdminId, ':event_id' => $event_id]);
- 
-        if ($stmt->rowCount() > 0) {
-            echo json_encode(['success' => true, 'message' => 'Event archived successfully.']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Event not found or already archived.']);
-        }
+        echo json_encode($stmt->rowCount() > 0
+            ? ['success' => true,  'message' => 'Event archived successfully.']
+            : ['success' => false, 'message' => 'Event not found or already archived.']);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
- 
     exit();
 }
  
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── RESTORE EVENT HANDLER ──
-// Purpose: Undo the archive — clears deleted_at and deleted_by so the event
-//          reappears in the active events list.
 // ═══════════════════════════════════════════════════════════════════════════════
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_event_id'])) {
     header('Content-Type: application/json');
- 
     $event_id = intval($_POST['restore_event_id']);
- 
-    if ($event_id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Invalid event ID.']);
-        exit();
-    }
- 
+    if ($event_id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid event ID.']); exit(); }
     try {
-        $stmt = $pdo->prepare("
-            UPDATE events
-            SET deleted_at = NULL,
-                deleted_by = NULL
-            WHERE event_id  = :event_id
-              AND deleted_at IS NOT NULL
-        ");
+        $stmt = $pdo->prepare("UPDATE events SET deleted_at = NULL, deleted_by = NULL WHERE event_id = :event_id AND deleted_at IS NOT NULL");
         $stmt->execute([':event_id' => $event_id]);
- 
-        if ($stmt->rowCount() > 0) {
-            echo json_encode(['success' => true, 'message' => 'Event restored successfully.']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Event not found or not archived.']);
-        }
+        echo json_encode($stmt->rowCount() > 0
+            ? ['success' => true,  'message' => 'Event restored successfully.']
+            : ['success' => false, 'message' => 'Event not found or not archived.']);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
- 
     exit();
 }
  
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── PERMANENT DELETE HANDLER ──
-// Purpose: Hard-delete only events that are already archived (deleted_at IS NOT NULL).
-//          This is a second-step safety net — users must archive first.
 // ═══════════════════════════════════════════════════════════════════════════════
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['permanent_delete_event_id'])) {
     header('Content-Type: application/json');
- 
     $event_id = intval($_POST['permanent_delete_event_id']);
- 
-    if ($event_id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Invalid event ID.']);
-        exit();
-    }
- 
+    if ($event_id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid event ID.']); exit(); }
     try {
-        $stmt = $pdo->prepare("
-            DELETE FROM events
-            WHERE event_id  = :event_id
-              AND deleted_at IS NOT NULL
-        ");
+        $stmt = $pdo->prepare("DELETE FROM events WHERE event_id = :event_id AND deleted_at IS NOT NULL");
         $stmt->execute([':event_id' => $event_id]);
- 
-        if ($stmt->rowCount() > 0) {
-            echo json_encode(['success' => true, 'message' => 'Event permanently deleted.']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Event not found or not in archive.']);
-        }
+        echo json_encode($stmt->rowCount() > 0
+            ? ['success' => true,  'message' => 'Event permanently deleted.']
+            : ['success' => false, 'message' => 'Event not found or not in archive.']);
     } catch (PDOException $e) {
         echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
     }
- 
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── ADD VENUE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_venue'])) {
+    header('Content-Type: application/json');
+    $name     = trim($_POST['venue_name'] ?? '');
+    $capacity = (isset($_POST['capacity']) && $_POST['capacity'] !== '') ? intval($_POST['capacity']) : null;
+    if ($name === '') { echo json_encode(['success' => false, 'message' => 'Venue name is required.']); exit(); }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO venues (venue_name, capacity) VALUES (:name, :cap)");
+        $stmt->execute([':name' => $name, ':cap' => $capacity]);
+        $newId = (int) $pdo->lastInsertId();
+        echo json_encode(['success' => true, 'venue' => ['venue_id' => $newId, 'venue_name' => $name, 'capacity' => $capacity]]);
+    } catch (PDOException $e) {
+        $msg = strpos($e->getMessage(), 'Duplicate') !== false ? 'Venue name already exists.' : 'Database error: ' . $e->getMessage();
+        echo json_encode(['success' => false, 'message' => $msg]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── EDIT VENUE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_venue'])) {
+    header('Content-Type: application/json');
+    $id       = intval($_POST['venue_id'] ?? 0);
+    $name     = trim($_POST['venue_name'] ?? '');
+    $capacity = (isset($_POST['capacity']) && $_POST['capacity'] !== '') ? intval($_POST['capacity']) : null;
+    if ($id <= 0 || $name === '') { echo json_encode(['success' => false, 'message' => 'Invalid data.']); exit(); }
+    try {
+        $stmt = $pdo->prepare("UPDATE venues SET venue_name = :name, capacity = :cap WHERE venue_id = :id");
+        $stmt->execute([':name' => $name, ':cap' => $capacity, ':id' => $id]);
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        $msg = strpos($e->getMessage(), 'Duplicate') !== false ? 'Venue name already exists.' : 'Database error: ' . $e->getMessage();
+        echo json_encode(['success' => false, 'message' => $msg]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── DELETE VENUE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_venue'])) {
+    header('Content-Type: application/json');
+    $id = intval($_POST['venue_id'] ?? 0);
+    if ($id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid ID.']); exit(); }
+    try {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM events WHERE venue_id = :id");
+        $check->execute([':id' => $id]);
+        if ((int) $check->fetchColumn() > 0) {
+            echo json_encode(['success' => false, 'message' => 'Cannot delete — this venue is used by one or more events.']);
+            exit();
+        }
+        $stmt = $pdo->prepare("DELETE FROM venues WHERE venue_id = :id");
+        $stmt->execute([':id' => $id]);
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── ADD EVENT TYPE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_event_type'])) {
+    header('Content-Type: application/json');
+    $name    = trim($_POST['type_name'] ?? '');
+    $org_id  = (isset($_POST['org_id'])  && $_POST['org_id']  !== '') ? intval($_POST['org_id'])  : null;
+    $club_id = (isset($_POST['club_id']) && $_POST['club_id'] !== '') ? intval($_POST['club_id']) : null;
+    if ($name === '') { echo json_encode(['success' => false, 'message' => 'Type name is required.']); exit(); }
+    try {
+        $stmt = $pdo->prepare("INSERT INTO event_types (type_name, org_id, club_id) VALUES (:name, :org, :club)");
+        $stmt->execute([':name' => $name, ':org' => $org_id, ':club' => $club_id]);
+        $newId = (int) $pdo->lastInsertId();
+        $orgName = null; $clubName = null;
+        if ($org_id) {
+            $r = $pdo->prepare("SELECT org_name FROM organizations WHERE org_id = :id");
+            $r->execute([':id' => $org_id]); $orgName = $r->fetchColumn() ?: null;
+        }
+        if ($club_id) {
+            $r = $pdo->prepare("SELECT club_name FROM clubs WHERE club_id = :id");
+            $r->execute([':id' => $club_id]); $clubName = $r->fetchColumn() ?: null;
+        }
+        echo json_encode(['success' => true, 'type' => [
+            'type_id' => $newId, 'type_name' => $name,
+            'org_id' => $org_id, 'club_id' => $club_id,
+            'org_name' => $orgName, 'club_name' => $clubName,
+        ]]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── EDIT EVENT TYPE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_event_type'])) {
+    header('Content-Type: application/json');
+    $id      = intval($_POST['type_id'] ?? 0);
+    $name    = trim($_POST['type_name'] ?? '');
+    $org_id  = (isset($_POST['org_id'])  && $_POST['org_id']  !== '') ? intval($_POST['org_id'])  : null;
+    $club_id = (isset($_POST['club_id']) && $_POST['club_id'] !== '') ? intval($_POST['club_id']) : null;
+    if ($id <= 0 || $name === '') { echo json_encode(['success' => false, 'message' => 'Invalid data.']); exit(); }
+    try {
+        $stmt = $pdo->prepare("UPDATE event_types SET type_name = :name, org_id = :org, club_id = :club WHERE type_id = :id");
+        $stmt->execute([':name' => $name, ':org' => $org_id, ':club' => $club_id, ':id' => $id]);
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── DELETE EVENT TYPE HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_event_type'])) {
+    header('Content-Type: application/json');
+    $id = intval($_POST['type_id'] ?? 0);
+    if ($id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid ID.']); exit(); }
+    try {
+        $check = $pdo->prepare("SELECT COUNT(*) FROM events WHERE event_type_id = :id");
+        $check->execute([':id' => $id]);
+        if ((int) $check->fetchColumn() > 0) {
+            echo json_encode(['success' => false, 'message' => 'Cannot delete — this event type is used by one or more events.']);
+            exit();
+        }
+        $stmt = $pdo->prepare("DELETE FROM event_types WHERE type_id = :id");
+        $stmt->execute([':id' => $id]);
+        echo json_encode(['success' => true]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
     exit();
 }
  
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FETCH ADMIN PROFILE DATA ──
 // ═══════════════════════════════════════════════════════════════════════════════
-$adminProfileQuery = "
-    SELECT a.first_name, a.last_name, a.middle_name, a.phone, a.profile_image,
-           u.email
-    FROM admin a
-    JOIN users u ON a.user_id = u.user_id
-    WHERE a.user_id = :admin_id
-    LIMIT 1
-";
- 
-$adminStmt = $pdo->prepare($adminProfileQuery);
-$adminStmt->execute(['admin_id' => $currentAdminId]);
+$adminStmt = $pdo->prepare("
+    SELECT a.first_name, a.last_name, a.middle_name, a.profile_image, u.email
+    FROM admin a JOIN users u ON a.user_id = u.user_id
+    WHERE a.user_id = :id LIMIT 1
+");
+$adminStmt->execute(['id' => $currentAdminId]);
 $adminData = $adminStmt->fetch(PDO::FETCH_ASSOC);
  
-$adminFirstName  = $adminData['first_name']  ?? '';
-$adminLastName   = $adminData['last_name']   ?? '';
-$adminMiddleName = $adminData['middle_name'] ?? '';
-$adminFullName   = trim($adminFirstName . ' ' . $adminMiddleName . ' ' . $adminLastName);
-$adminFullName   = $adminFullName !== '' ? htmlspecialchars($adminFullName) : 'Administrator';
- 
-$adminAvatar = '';
+$adminFirstName = $adminData['first_name'] ?? '';
+$adminLastName  = $adminData['last_name']  ?? '';
+$adminMiddleName= $adminData['middle_name'] ?? '';
+$adminFullName  = trim($adminFirstName . ' ' . $adminMiddleName . ' ' . $adminLastName);
+$adminFullName  = $adminFullName !== '' ? htmlspecialchars($adminFullName) : 'Administrator';
+$adminAvatar    = '';
 if (!empty($adminData['profile_image'])) {
-    $imageData   = base64_encode($adminData['profile_image']);
-    $adminAvatar = "data:image/jpeg;base64,{$imageData}";
+    $adminAvatar = 'data:image/jpeg;base64,' . base64_encode($adminData['profile_image']);
 }
  
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── FETCH ACTIVE EVENTS (deleted_at IS NULL) ──
+// ── FETCH ACTIVE EVENTS ──
 // ═══════════════════════════════════════════════════════════════════════════════
-$sqlActive = "
-    SELECT
-        e.event_id AS id,
-        e.title,
-        e.description,
-        e.status,
-        DATE_FORMAT(e.start_datetime, '%M %e, %Y') AS date,
-        e.start_datetime,
-        e.end_datetime,
-        COALESCE(o.org_name, c.club_name, 'N/A') AS org
+$stmtActive = $pdo->query("
+    SELECT e.event_id AS id, e.title, e.description, e.status,
+           DATE_FORMAT(e.start_datetime,'%M %e, %Y') AS date,
+           e.start_datetime, e.end_datetime,
+           COALESCE(o.org_name, c.club_name, 'N/A') AS org
     FROM events e
-    LEFT JOIN organizations o ON e.org_id = o.org_id
-    LEFT JOIN clubs c         ON e.club_id = c.club_id
-    WHERE e.deleted_at IS NULL
-    ORDER BY e.created_at DESC
-";
- 
-$stmtActive  = $pdo->query($sqlActive);
-$events      = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
+    LEFT JOIN organizations o ON e.org_id   = o.org_id
+    LEFT JOIN clubs c         ON e.club_id  = c.club_id
+    WHERE e.deleted_at IS NULL ORDER BY e.created_at DESC
+");
+$events = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
  
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── FETCH ARCHIVED EVENTS (deleted_at IS NOT NULL) ──
+// ── FETCH ARCHIVED EVENTS ──
 // ═══════════════════════════════════════════════════════════════════════════════
-$sqlArchived = "
-    SELECT
-        e.event_id AS id,
-        e.title,
-        e.description,
-        e.status,
-        DATE_FORMAT(e.start_datetime, '%M %e, %Y')  AS date,
-        DATE_FORMAT(e.deleted_at,     '%M %e, %Y')  AS archived_date,
-        e.start_datetime,
-        e.end_datetime,
-        e.deleted_at,
-        COALESCE(o.org_name, c.club_name, 'N/A')    AS org,
-        CONCAT(a.first_name, ' ', a.last_name)       AS archived_by_name
+$stmtArchived = $pdo->query("
+    SELECT e.event_id AS id, e.title, e.description, e.status,
+           DATE_FORMAT(e.start_datetime,'%M %e, %Y') AS date,
+           DATE_FORMAT(e.deleted_at,    '%M %e, %Y') AS archived_date,
+           e.start_datetime, e.end_datetime, e.deleted_at,
+           COALESCE(o.org_name, c.club_name, 'N/A') AS org,
+           CONCAT(a.first_name,' ',a.last_name)      AS archived_by_name
     FROM events e
     LEFT JOIN organizations o ON e.org_id    = o.org_id
     LEFT JOIN clubs c         ON e.club_id   = c.club_id
     LEFT JOIN admin a         ON e.deleted_by = a.user_id
-    WHERE e.deleted_at IS NOT NULL
-    ORDER BY e.deleted_at DESC
-";
- 
-$stmtArchived   = $pdo->query($sqlArchived);
+    WHERE e.deleted_at IS NOT NULL ORDER BY e.deleted_at DESC
+");
 $archivedEvents = $stmtArchived->fetchAll(PDO::FETCH_ASSOC);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── FETCH VENUES ──
+// ═══════════════════════════════════════════════════════════════════════════════
+$stmtVenues = $pdo->query("SELECT venue_id, venue_name, capacity FROM venues ORDER BY venue_name");
+$venues = $stmtVenues->fetchAll(PDO::FETCH_ASSOC);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── FETCH EVENT TYPES ──
+// ═══════════════════════════════════════════════════════════════════════════════
+$stmtTypes = $pdo->query("
+    SELECT et.type_id, et.type_name, et.org_id, et.club_id,
+           o.org_name, c.club_name
+    FROM event_types et
+    LEFT JOIN organizations o ON et.org_id  = o.org_id
+    LEFT JOIN clubs c         ON et.club_id = c.club_id
+    ORDER BY et.type_name
+");
+$eventTypes = $stmtTypes->fetchAll(PDO::FETCH_ASSOC);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── FETCH ORGANIZATIONS & CLUBS (for dropdowns) ──
+// ═══════════════════════════════════════════════════════════════════════════════
+$stmtOrgs  = $pdo->query("SELECT org_id, org_name FROM organizations WHERE deleted_at IS NULL ORDER BY org_name");
+$orgs      = $stmtOrgs->fetchAll(PDO::FETCH_ASSOC);
+$stmtClubs = $pdo->query("SELECT club_id, club_name FROM clubs WHERE deleted_at IS NULL ORDER BY club_name");
+$clubs     = $stmtClubs->fetchAll(PDO::FETCH_ASSOC);
  
-// ── STATISTICS (active only) ──
+// ── STATISTICS ──
 $totalEvents    = count($events);
 $approvedEvents = count(array_filter($events, fn($e) => $e['status'] === 'approved'));
 $pendingEvents  = count(array_filter($events, fn($e) => $e['status'] === 'pending'));
@@ -211,13 +301,17 @@ $rejectedEvents = count(array_filter($events, fn($e) => $e['status'] === 'reject
 $archivedCount  = count($archivedEvents);
  
 // ── JSON BRIDGE ──
-$eventDataJson         = json_encode($events,         JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT);
-$archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT);
+$flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT;
+$eventDataJson         = json_encode($events,         $flags);
+$archivedEventDataJson = json_encode($archivedEvents, $flags);
+$venueDataJson         = json_encode($venues,         $flags);
+$eventTypeDataJson     = json_encode($eventTypes,     $flags);
+$orgDataJson           = json_encode($orgs,           $flags);
+$clubDataJson          = json_encode($clubs,          $flags);
 ?>
  
 <!DOCTYPE html>
 <html lang="en">
- 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -240,15 +334,14 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                         'slide-in': 'slideIn .3s ease both',
                     },
                     keyframes: {
-                        fadeUp:   { '0%':{'opacity':'0','transform':'translateY(20px)'}, '100%':{'opacity':'1','transform':'translateY(0)'} },
-                        fadeIn:   { '0%':{'opacity':'0'}, '100%':{'opacity':'1'} },
-                        slideIn:  { '0%':{'opacity':'0','transform':'translateX(-10px)'}, '100%':{'opacity':'1','transform':'translateX(0)'} },
+                        fadeUp:  { '0%':{'opacity':'0','transform':'translateY(20px)'}, '100%':{'opacity':'1','transform':'translateY(0)'} },
+                        fadeIn:  { '0%':{'opacity':'0'}, '100%':{'opacity':'1'} },
+                        slideIn: { '0%':{'opacity':'0','transform':'translateX(-10px)'}, '100%':{'opacity':'1','transform':'translateX(0)'} },
                     }
                 }
             }
         }
     </script>
- 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="/CSS/admin_event_management.css">
@@ -364,7 +457,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                         <p class="text-sm font-semibold text-slate-900 dark:text-white leading-none"><?= $adminFullName ?></p>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Administrator</p>
                     </div>
-                    <div class="relative group cursor-pointer">
+                    <div class="relative cursor-pointer">
                         <?php if ($adminAvatar): ?>
                             <img src="<?= $adminAvatar ?>" alt="<?= $adminFullName ?>"
                                 class="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-md">
@@ -405,8 +498,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                             </div>
                             <div class="pr-14">
                                 <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1"><?= $s['label'] ?></p>
-                                <p id="stat-<?= $s['slug'] ?>"
-                                   class="text-3xl font-bold <?= $s['text'] ?> <?= $s['darkText'] ?> leading-none">
+                                <p id="stat-<?= $s['slug'] ?>" class="text-3xl font-bold <?= $s['text'] ?> <?= $s['darkText'] ?> leading-none">
                                     <?= $s['value'] ?>
                                 </p>
                             </div>
@@ -414,8 +506,8 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                     <?php endforeach; ?>
                 </div>
  
-                <!-- ── VIEW TOGGLE ── -->
-                <div class="flex items-center gap-3 animate-fade-up" style="animation-delay:.05s">
+                <!-- ── VIEW TOGGLE + MANAGE BUTTON ── -->
+                <div class="flex items-center gap-3 flex-wrap animate-fade-up" style="animation-delay:.05s">
                     <div class="flex rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden bg-white dark:bg-slate-800 shadow-sm">
                         <button id="view-active-btn" onclick="showActiveView()"
                             class="px-4 py-2.5 text-xs font-semibold flex items-center gap-2 bg-primary-500 text-white transition-all duration-200">
@@ -432,6 +524,18 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                             <?php endif; ?>
                         </button>
                     </div>
+
+                    <!-- ── MANAGE VENUES & TYPES BUTTON ── -->
+                    <button onclick="openManageModal()"
+                        class="ml-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold
+                               bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                               text-slate-600 dark:text-slate-300
+                               hover:border-violet-400 hover:text-violet-600 dark:hover:text-violet-400
+                               hover:bg-violet-50 dark:hover:bg-violet-500/10
+                               shadow-sm transition-all duration-200">
+                        <i class="fas fa-sliders-h text-violet-500"></i>
+                        Manage Venues &amp; Types
+                    </button>
                 </div>
  
                 <!-- ── ACTIVE EVENTS SECTION ── -->
@@ -458,7 +562,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                             </button>
                         </div>
                         <div class="sm:ml-auto">
-                            <span id="result-count" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
                                 <i class="fas fa-table mr-1.5 text-primary-500"></i>
                                 <span id="result-num">0</span> results
                             </span>
@@ -484,9 +588,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                                         <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="event-table-body" class="divide-y divide-gray-100 dark:divide-slate-700">
-                                    <!-- JS rendered by admin_event_manage.js -->
-                                </tbody>
+                                <tbody id="event-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
                             </table>
                         </div>
                         <div id="empty-state" class="hidden px-4 py-12 text-center">
@@ -501,7 +603,6 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
  
                 <!-- ── ARCHIVED EVENTS SECTION ── -->
                 <div id="archived-section" class="hidden space-y-5">
- 
                     <div class="flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-up">
                         <div class="flex items-center gap-2">
                             <div class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
@@ -516,7 +617,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                                     oninput="filterArchived()"
                                     class="pl-9 pr-4 py-2 text-sm rounded-xl bg-gray-100 dark:bg-slate-700 border-0 focus:outline-none focus:ring-2 focus:ring-primary-500/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all duration-200 w-52" />
                             </div>
-                            <span id="archive-result-count" class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
                                 <i class="fas fa-archive mr-1.5 text-slate-500"></i>
                                 <span id="archive-result-num">0</span> archived
                             </span>
@@ -543,9 +644,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
                                         <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody id="archive-table-body" class="divide-y divide-gray-100 dark:divide-slate-700">
-                                    <!-- populated by renderArchivedTable() -->
-                                </tbody>
+                                <tbody id="archive-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
                             </table>
                         </div>
                         <div id="archive-empty-state" class="hidden px-4 py-12 text-center">
@@ -563,6 +662,266 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
         </main>
     </div>
  
+    <!-- ════════════════════════════════════════════════════════════
+         ── MANAGE VENUES & EVENT TYPES MODAL (main list) ──
+         ════════════════════════════════════════════════════════════ -->
+    <div id="manageModal" class="fixed inset-0 z-[150] hidden">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeManageModal()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-200 dark:border-slate-700 my-8 flex flex-col max-h-[85vh]">
+
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+                            <i class="fas fa-sliders-h text-violet-500 text-sm"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-900 dark:text-white text-sm">Manage Venues &amp; Event Types</p>
+                            <p class="text-xs text-slate-400">Add, edit, or remove venues and event types</p>
+                        </div>
+                    </div>
+                    <button onclick="closeManageModal()"
+                        class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex gap-2 px-6 pt-5 flex-shrink-0">
+                    <button id="mgmt-tab-venues" onclick="switchManageTab('venues')"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold bg-primary-500 text-white shadow-sm transition-all duration-200">
+                        <i class="fas fa-map-marker-alt mr-1.5"></i> Venues
+                    </button>
+                    <button id="mgmt-tab-types" onclick="switchManageTab('types')"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-slate-600 hover:border-primary-400 hover:text-primary-500 transition-all duration-200">
+                        <i class="fas fa-tags mr-1.5"></i> Event Types
+                    </button>
+                </div>
+
+                <!-- Scrollable content -->
+                <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+
+                    <!-- ── VENUES PANEL ── -->
+                    <div id="mgmt-venues-panel">
+                        <div class="flex items-center justify-between mb-3">
+                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                                All Venues <span id="venue-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span>
+                            </p>
+                            <button onclick="openVenueForm(null)"
+                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
+                                       bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                                <i class="fas fa-plus"></i> Add Venue
+                            </button>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-700/50">
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Venue Name</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Capacity</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="venue-list-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+                            </table>
+                            <div id="venue-empty-state" class="hidden py-10 text-center">
+                                <div class="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-map-marker-alt text-gray-400"></i>
+                                </div>
+                                <p class="text-slate-500 dark:text-slate-400 text-sm">No venues yet. Add one above.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── EVENT TYPES PANEL ── -->
+                    <div id="mgmt-types-panel" class="hidden">
+                        <div class="flex items-center justify-between mb-3">
+                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                                All Event Types <span id="type-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span>
+                            </p>
+                            <button onclick="openTypeForm(null)"
+                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
+                                       bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                                <i class="fas fa-plus"></i> Add Event Type
+                            </button>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-700/50">
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Type Name</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Scope</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="type-list-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+                            </table>
+                            <div id="type-empty-state" class="hidden py-10 text-center">
+                                <div class="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-tags text-gray-400"></i>
+                                </div>
+                                <p class="text-slate-500 dark:text-slate-400 text-sm">No event types yet. Add one above.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /scrollable content -->
+
+                <!-- Footer -->
+                <div class="px-6 py-3 border-t border-gray-100 dark:border-slate-700 flex justify-end flex-shrink-0">
+                    <button onclick="closeManageModal()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         ── VENUE FORM MODAL (Add / Edit) ──
+         ════════════════════════════════════════════════════════════ -->
+    <div id="venueFormModal" class="fixed inset-0 z-[250] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeVenueForm()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-slate-700">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-primary-50 dark:bg-primary-500/10 flex items-center justify-center">
+                            <i class="fas fa-map-marker-alt text-primary-500 text-xs"></i>
+                        </div>
+                        <p id="venueFormTitle" class="font-bold text-slate-900 dark:text-white text-sm">Add Venue</p>
+                    </div>
+                    <button onclick="closeVenueForm()"
+                        class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                            Venue Name <span class="text-rose-500">*</span>
+                        </label>
+                        <input id="venueNameInput" type="text" placeholder="e.g. Main Gymnasium"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                            Capacity <span class="text-slate-400 font-normal normal-case">(optional)</span>
+                        </label>
+                        <input id="venueCapInput" type="number" min="1" placeholder="e.g. 500"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
+                    <button onclick="closeVenueForm()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Cancel
+                    </button>
+                    <button id="venueFormSubmitBtn" onclick="submitVenueForm()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                        <i class="fas fa-save"></i> Save Venue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         ── EVENT TYPE FORM MODAL (Add / Edit) ──
+         ════════════════════════════════════════════════════════════ -->
+    <div id="typeFormModal" class="fixed inset-0 z-[250] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeTypeForm()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-slate-700">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
+                            <i class="fas fa-tags text-violet-500 text-xs"></i>
+                        </div>
+                        <p id="typeFormTitle" class="font-bold text-slate-900 dark:text-white text-sm">Add Event Type</p>
+                    </div>
+                    <button onclick="closeTypeForm()"
+                        class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                            Type Name <span class="text-rose-500">*</span>
+                        </label>
+                        <input id="typeNameInput" type="text" placeholder="e.g. Academic Symposium"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                            Organization <span class="text-slate-400 font-normal normal-case">(optional)</span>
+                        </label>
+                        <select id="typeOrgSelect"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                            <option value="">— None —</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
+                            Club <span class="text-slate-400 font-normal normal-case">(optional)</span>
+                        </label>
+                        <select id="typeClubSelect"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                            <option value="">— None —</option>
+                        </select>
+                    </div>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Linking to an org or club makes this type available only to that group. Leave both empty for a general type.
+                    </p>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
+                    <button onclick="closeTypeForm()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Cancel
+                    </button>
+                    <button id="typeFormSubmitBtn" onclick="submitTypeForm()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-600 text-white shadow-sm shadow-violet-500/30 transition-all duration-200">
+                        <i class="fas fa-save"></i> Save Type
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         ── MANAGE DELETE CONFIRMATION MODAL (shared) ──
+         ════════════════════════════════════════════════════════════ -->
+    <div id="mgmtDeleteModal" class="fixed inset-0 z-[300] hidden">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeMgmtDeleteModal()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs border border-rose-200 dark:border-rose-500/40 text-center p-6">
+                <div class="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-trash-alt text-rose-500 text-lg"></i>
+                </div>
+                <p class="font-bold text-slate-900 dark:text-white mb-1">Delete Item?</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-1 leading-relaxed">
+                    You are about to delete <strong id="mgmtDeleteName" class="text-slate-900 dark:text-white"></strong>.
+                    This cannot be undone.
+                </p>
+                <p id="mgmtDeleteInUseNote" class="hidden text-xs text-rose-500 mt-1">Cannot delete items currently used by events.</p>
+                <div class="flex gap-3 justify-center mt-5">
+                    <button onclick="closeMgmtDeleteModal()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
+                        Cancel
+                    </button>
+                    <button id="mgmtDeleteConfirmBtn" onclick="confirmMgmtDelete()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200">
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ── VIEW EVENT MODAL ── -->
     <div id="eventModal" class="fixed inset-0 z-[100] hidden">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeModal()"></div>
@@ -678,8 +1037,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
  
     <!-- ── TOAST ── -->
     <div id="toast"
-        class="fixed bottom-6 right-6 z-[999] hidden items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white max-w-xs transition-all duration-300"
-        style="animation: fadeUp .3s ease both">
+        class="fixed bottom-6 right-6 z-[999] hidden items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white max-w-xs">
         <i id="toast-icon" class="fas fa-check-circle text-base"></i>
         <span id="toast-msg"></span>
     </div>
@@ -689,6 +1047,10 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
         const SEMS_EVENT_DATA = {
             events:         <?= $eventDataJson ?>,
             archivedEvents: <?= $archivedEventDataJson ?>,
+            venues:         <?= $venueDataJson ?>,
+            eventTypes:     <?= $eventTypeDataJson ?>,
+            orgs:           <?= $orgDataJson ?>,
+            clubs:          <?= $clubDataJson ?>,
         };
     </script>
     <script src="/js/admin_event_manage.js"></script>
