@@ -222,7 +222,7 @@ $archivedEventDataJson = json_encode($archivedEvents, JSON_HEX_TAG | JSON_HEX_AP
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SEMS Admin — Event Management</title>
-    <link rel="icon" href="/assets/event-icon-indigo.svg" />
+    <link rel="icon" href="/assets/events-icon-indigo.svg" />
  
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

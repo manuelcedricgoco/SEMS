@@ -213,6 +213,7 @@ $archivedJson = json_encode($archivedUsers ?: [], JSON_HEX_TAG | JSON_HEX_APOS |
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SEMS Admin — User Management</title>
+    <link rel="icon" href="/assets/user-management-icon-indigo.svg" />
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

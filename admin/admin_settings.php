@@ -327,6 +327,7 @@ $roleBadge = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SEMS — Admin Settings</title>
+    <link rel="icon" href="/assets/settings-icon-indigo.svg" />
 
     <!-- Tailwind CSS — ginagamit para sa utility-first styling ng buong page -->
     <script src="https://cdn.tailwindcss.com"></script>
