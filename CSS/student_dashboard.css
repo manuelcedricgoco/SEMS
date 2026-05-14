@@ -755,7 +755,6 @@ body::before {
   gap: 1rem;
 }
 
-
     .ann-card {
       display: flex;
       background: var(--card);
@@ -799,3 +798,61 @@ body::before {
 }
 .anim { animation: fadeUp .45s ease-out both; animation-play-state: paused; }
 .anim.running { animation-play-state: running; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   PATCH — 2-col announcement grid + show-more overflow
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Announcements: 2-column grid (mirrors events-rail) ── */
+.ann-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .875rem;
+}
+@media (min-width: 768px) {
+  .ann-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.ann-grid .ann-card { height: 100%; }
+
+/* ── Overflow rail: hides items beyond threshold ── */
+.overflow-rail { position: relative; }
+.overflow-rail:not(.is-expanded) .overflow-hide { display: none !important; }
+
+/* Gradient fade when collapsed */
+.overflow-rail:not(.is-expanded)::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 56px;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.dark .overflow-rail:not(.is-expanded)::after {
+  background: linear-gradient(to bottom, transparent, var(--bg));
+}
+
+/* ── Show more / less button ── */
+.show-more-btn {
+  display: flex; align-items: center; justify-content: center; gap: .45rem;
+  width: 100%; margin-top: .875rem; padding: .55rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: .82rem; font-weight: 700;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--purple); background: var(--purplebg);
+  border: 1px solid var(--purplebdr);
+  cursor: pointer; transition: background .18s, color .18s, border-color .18s;
+}
+.show-more-btn:hover { background: var(--purple); color: #fff; border-color: var(--purple); }
+.show-more-btn i { transition: transform .25s cubic-bezier(.4,0,.2,1); flex-shrink: 0; }
+.show-more-btn.is-expanded i { transform: rotate(180deg); }
+
+.show-more-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; padding: .1rem .45rem; border-radius: 99px;
+  font-size: .65rem; font-weight: 800;
+  background: var(--purple); color: #fff;
+  margin-left: .15rem; transition: background .18s;
+}
+.show-more-btn:hover .show-more-count { background: rgba(255,255,255,.25); }

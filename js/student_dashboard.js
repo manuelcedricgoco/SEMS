@@ -162,3 +162,95 @@ function clearHistorySearch() {
   const el = document.getElementById('historySearch');
   if (el) { el.value = ''; filterHistory(); }
 }
+
+
+// ══════════════════════════════════════════════════════════════════
+// PATCH — 2-col announcement grid + show-more for announcements & events
+// ══════════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+
+  const ANN_THRESHOLD   = 4;   // announcements visible before "Show more"
+  const EVENT_THRESHOLD = 4;   // event cards visible before "Show more"
+
+  /* Build a show-more / show-less toggle button */
+  function buildBtn(hiddenCount, rail) {
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'show-more-btn';
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML =
+      `<i data-lucide="chevron-down" style="width:14px;height:14px;"></i>` +
+      `Show more` +
+      `<span class="show-more-count">${hiddenCount}</span>`;
+
+    btn.addEventListener('click', function () {
+      const expanded = rail.classList.toggle('is-expanded');
+      btn.classList.toggle('is-expanded', expanded);
+      btn.setAttribute('aria-expanded', String(expanded));
+
+      // Swap label text node (sits between the icon and the count span)
+      const textNode = Array.from(btn.childNodes)
+        .find(n => n.nodeType === Node.TEXT_NODE);
+      if (textNode) textNode.textContent = expanded ? 'Show less' : 'Show more';
+
+      const countEl = btn.querySelector('.show-more-count');
+      if (countEl) countEl.style.display = expanded ? 'none' : '';
+
+      lucide.createIcons();
+    });
+
+    return btn;
+  }
+
+  /* Hide items beyond threshold, attach show-more button after container */
+  function applyOverflow(container, selector, threshold) {
+    const items = Array.from(container.querySelectorAll(selector));
+    if (items.length <= threshold) return;
+
+    items.slice(threshold).forEach(el => el.classList.add('overflow-hide'));
+    container.classList.add('overflow-rail');
+    container.after(buildBtn(items.length - threshold, container));
+  }
+
+  /* ── 1. Announcements → ann-grid + overflow ── */
+  function patchAnnouncements() {
+    let annContainer = null;
+
+    document.querySelectorAll('.section-heading').forEach(heading => {
+      if (!heading.textContent.trim().startsWith('Announcements')) return;
+      const row     = heading.closest('[style*="margin-bottom"]') || heading.parentElement;
+      const sibling = row?.nextElementSibling;
+      if (sibling?.querySelector('.ann-card')) annContainer = sibling;
+    });
+
+    if (!annContainer) return;
+
+    // Switch from flex-column to grid
+    annContainer.classList.add('ann-grid');
+    annContainer.style.display       = '';
+    annContainer.style.flexDirection = '';
+    annContainer.style.gap           = '';
+
+    applyOverflow(annContainer, '.ann-card', ANN_THRESHOLD);
+  }
+
+  /* ── 2. Upcoming events rail → overflow ── */
+  function patchEventsRail() {
+    const rail = document.getElementById('eventsRail');
+    if (rail) applyOverflow(rail, '.event-card', EVENT_THRESHOLD);
+  }
+
+  /* Run after DOM is ready */
+  function init() {
+    patchAnnouncements();
+    patchEventsRail();
+    lucide.createIcons();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
