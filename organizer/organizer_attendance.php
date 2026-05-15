@@ -1,11 +1,14 @@
 <?php
 /* ============================================================
  | FILE   : organizer_attendance.php
- | PURPOSE: Attendance tracking — now includes:
+ | PURPOSE: Attendance tracking — enhanced with:
+ |   • Custom confirmation modals (no browser confirm())
+ |   • Archive → custom modal confirmation
+ |   • Archived rows show Restore + Delete buttons
+ |   • Restore → custom modal confirmation
+ |   • Delete  → custom danger modal confirmation
  |   • Proof image column (thumbnail → lightbox, lazy-loaded)
- |   • Archive / Unarchive individual records
- |   • Edit status (Present ↔ Absent) with side-by-side
- |     proof photo + student account photo for fraud detection
+ |   • Edit status (Present ↔ Absent) with fraud detection
  ============================================================ */
 
 session_start();
@@ -45,7 +48,7 @@ function buildOrgEventWhere(string $prefix, int $uid, ?int $orgId, ?int $clubId,
     return "{$p}organizer_id = ?";
 }
 
-/* ── Ownership guard (reusable) ───────────────────────────── */
+/* ── Ownership guard ──────────────────────────────────────── */
 function ownsAttendance(PDO $pdo, int $uid, ?int $orgId, ?int $clubId, int $attId): bool
 {
     $op = [];
@@ -60,9 +63,8 @@ function ownsAttendance(PDO $pdo, int $uid, ?int $orgId, ?int $clubId, int $attI
     return (bool) $q->fetch();
 }
 
-
 /* ============================================================
- | AJAX HANDLERS  (POST action=…  or  GET action=get_proof)
+ | AJAX HANDLERS
  ============================================================ */
 
 /* ── Serve proof image blob ─────────────────────────────── */
@@ -104,9 +106,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             break;
 
-        /* Unarchive ───────────────────────────────────────── */
+        /* Restore (Unarchive) ─────────────────────────────── */
         case 'unarchive':
             $pdo->prepare("UPDATE attendance SET archived_at = NULL WHERE attendance_id = ?")->execute([$attId]);
+            echo json_encode(['success' => true]);
+            break;
+
+        /* Delete permanently ──────────────────────────────── */
+        case 'delete':
+            $pdo->prepare("DELETE FROM attendance WHERE attendance_id = ?")->execute([$attId]);
             echo json_encode(['success' => true]);
             break;
 
@@ -157,9 +165,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     exit;
 }
 
-
 /* ============================================================
- | ORG / CLUB DETAILS — sidebar logo + name
+ | ORG / CLUB DETAILS
  ============================================================ */
 $orgName = 'Organization'; $orgType = 'Organization';
 $hasOrgLogo = false; $orgData = null; $orgMime = 'image/jpeg';
@@ -181,7 +188,6 @@ try {
         if ($d && strpos($d, 'image/') === 0) $orgMime = $d;
     }
 } catch (Exception $e) {}
-
 
 /* ============================================================
  | ORGANIZER PROFILE DATA
@@ -216,7 +222,6 @@ if ($hasImage) {
     } catch (Exception $e) { $hasImage = false; }
 }
 
-
 /* ============================================================
  | SIDEBAR BADGE COUNTS
  ============================================================ */
@@ -228,7 +233,6 @@ $sbRegParams = []; $sbRegWhere = buildOrgEventWhere('e', $uid, $myOrgId, $myClub
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM registrations r JOIN events e ON r.event_id = e.event_id WHERE $sbRegWhere AND e.deleted_at IS NULL");
 $stmt->execute($sbRegParams); $registrations = $stmt->fetchColumn();
 
-
 /* ============================================================
  | CLEANUP ORPHANED RECORDS
  ============================================================ */
@@ -236,12 +240,8 @@ try {
     $pdo->exec("DELETE FROM attendance WHERE NOT EXISTS (SELECT 1 FROM events e WHERE e.event_id = attendance.event_id)");
 } catch (Exception $e) {}
 
-
 /* ============================================================
  | MAIN ATTENDANCE QUERY
- | proof_image blob is NOT fetched here to keep memory lean —
- | only a boolean "has_proof" flag is fetched. The actual blob
- | is served on demand via GET ?action=get_proof&id=X (same file).
  ============================================================ */
 $attParams = [];
 $attWhere  = buildOrgEventWhere('e', $uid, $myOrgId, $myClubId, $attParams);
@@ -270,7 +270,6 @@ $attQ = $pdo->prepare("
 $attQ->execute($attParams);
 $rawRecords = $attQ->fetchAll(PDO::FETCH_ASSOC);
 
-
 /* ============================================================
  | PRE-PROCESS — encode student profile images
  ============================================================ */
@@ -291,9 +290,8 @@ foreach ($rawRecords as $rec) {
     $allAttendanceRecords[] = $rec;
 }
 
-
 /* ============================================================
- | STATS — active (non-archived) records only
+ | STATS
  ============================================================ */
 $presentCount = 0; $absentCount = 0; $archivedCount = 0;
 foreach ($allAttendanceRecords as $rec) {
@@ -347,14 +345,10 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
 
         /* ── Proof lightbox ── */
         #proofLightbox { backdrop-filter: blur(8px); }
-        #proofLightbox img {
-            max-height: 85vh; max-width: 90vw;
-            border-radius: 1rem;
-            box-shadow: 0 30px 80px rgba(0,0,0,.7);
-        }
+        #proofLightbox img { max-height: 85vh; max-width: 90vw; border-radius: 1rem; box-shadow: 0 30px 80px rgba(0,0,0,.7); }
 
         /* ── Archived row ── */
-        tr.att-archived td { opacity: .5; }
+        tr.att-archived td { opacity: .55; }
         tr.att-archived {
             background: repeating-linear-gradient(
                 45deg, transparent, transparent 8px,
@@ -363,40 +357,56 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
         }
 
         /* ── Edit-status fraud panel ── */
-        .side-by-side-panel {
-            display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
-        }
-        .fraud-card {
-            border-radius: .75rem; padding: .75rem;
-            border: 2px solid; text-align: center;
-        }
-        .fraud-card img, .fraud-card .fraud-init {
-            width: 5rem; height: 5rem; object-fit: cover;
-            border-radius: .5rem; margin: 0 auto .5rem;
-        }
-        .fraud-card .fraud-init {
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.5rem; font-weight: 700;
-        }
+        .side-by-side-panel { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+        .fraud-card { border-radius: .75rem; padding: .75rem; border: 2px solid; text-align: center; }
+        .fraud-card img, .fraud-card .fraud-init { width: 5rem; height: 5rem; object-fit: cover; border-radius: .5rem; margin: 0 auto .5rem; }
+        .fraud-card .fraud-init { display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 700; }
         .fraud-card.proof-card  { border-color: #86efac; background: #f0fdf4; }
         .fraud-card.account-card { border-color: #bfdbfe; background: #eff6ff; }
         html.dark .fraud-card.proof-card   { background: rgba(20,83,45,.2);  border-color: #166534; }
         html.dark .fraud-card.account-card { background: rgba(30,58,138,.2); border-color: #1d4ed8; }
 
-        /* ── Status toggle buttons in Edit modal ── */
-        .status-btn {
-            flex: 1; padding: .6rem 0; border-radius: .6rem;
-            border: 2px solid; font-weight: 600; font-size: .8rem;
-            cursor: pointer; transition: all .2s;
-        }
+        /* ── Status toggle buttons ── */
+        .status-btn { flex: 1; padding: .6rem 0; border-radius: .6rem; border: 2px solid; font-weight: 600; font-size: .8rem; cursor: pointer; transition: all .2s; }
         .status-btn.sel-present { background:#dcfce7; color:#15803d; border-color:#86efac; }
         .status-btn.sel-absent  { background:#fee2e2; color:#b91c1c; border-color:#fca5a5; }
-        .status-btn:not(.sel-present):not(.sel-absent) {
-            background: transparent; color: #6b7280; border-color: #d1d5db;
+        .status-btn:not(.sel-present):not(.sel-absent) { background: transparent; color: #6b7280; border-color: #d1d5db; }
+        html.dark .status-btn:not(.sel-present):not(.sel-absent) { color: #9ca3af; border-color: #374151; }
+
+        /* ── Custom confirmation modals shared ── */
+        .confirm-modal-wrap {
+            backdrop-filter: blur(8px);
         }
-        html.dark .status-btn:not(.sel-present):not(.sel-absent) {
-            color: #9ca3af; border-color: #374151;
+        .confirm-modal-card {
+            animation: modalPop .2s cubic-bezier(.34,1.56,.64,1) both;
         }
+        @keyframes modalPop {
+            from { opacity:0; transform: scale(.88) translateY(12px); }
+            to   { opacity:1; transform: scale(1)   translateY(0); }
+        }
+
+        /* ── Anim helpers ── */
+        .anim-up { animation: fadeUp .4s ease both; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+        .d-0{animation-delay:.05s} .d-1{animation-delay:.1s} .d-2{animation-delay:.15s} .d-3{animation-delay:.2s}
+        .card-hover { transition: transform .2s, box-shadow .2s; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,.08); }
+        .row-hover:hover td { background: rgba(34,197,94,.04); }
+        .modal-pop { animation: modalPop .22s cubic-bezier(.34,1.56,.64,1) both; }
+
+        /* ── Student avatar ── */
+        .student-avatar { width:2rem; height:2rem; border-radius:.5rem; object-fit:cover; flex-shrink:0; }
+        .student-avatar-init { display:flex; align-items:center; justify-content:center; background:#dcfce7; color:#15803d; font-weight:700; font-size:.75rem; }
+
+        /* ── Sidebar overlay ── */
+        #sb-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:40; }
+        #sb-overlay.show { display:block; }
+
+        /* ── Nav active ── */
+        .nav-link.active { background: linear-gradient(135deg,rgba(34,197,94,.12),rgba(16,163,74,.08)); color:#15803d; font-weight:600; }
+        html.dark .nav-link.active { color:#4ade80; }
+        .icon-wrap { transition: transform .2s; }
+        .nav-link:hover .icon-wrap { transform: scale(1.1); }
     </style>
 </head>
 
@@ -404,9 +414,9 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
 
     <div id="sb-overlay" onclick="closeSidebar()"></div>
 
-    <!-- ═══════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════
          SIDEBAR
-    ═══════════════════════════════════════════════════════ -->
+    ═══════════════════════════════════════════════════ -->
     <aside id="sidebar"
         class="fixed top-0 left-0 h-screen w-64 z-50
                bg-white dark:bg-gray-800
@@ -439,7 +449,7 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
             <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Events</p>
             <a href="/organizer/organizer_event.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm"><i class="fas fa-clipboard-list"></i></span>
-                <span class="flex-1">Events  & Announcements</span>
+                <span class="flex-1">Events &amp; Announcements</span>
                 <?php if ($myEvents > 0): ?>
                     <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span>
                 <?php endif; ?>
@@ -478,10 +488,9 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
         </div>
     </aside>
 
-
-    <!-- ═══════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════
          MAIN CONTENT
-    ═══════════════════════════════════════════════════════ -->
+    ═══════════════════════════════════════════════════ -->
     <div class="lg:ml-64 min-h-screen flex flex-col">
 
         <!-- STICKY HEADER -->
@@ -529,7 +538,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
             </div>
         </header>
 
-
         <!-- MAIN PAGE -->
         <main class="flex-1 p-4 sm:p-6 space-y-6 max-w-7xl mx-auto w-full">
 
@@ -544,7 +552,7 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                 </button>
             </div>
 
-            <!-- ── STAT CARDS ──────────────────────────────────── -->
+            <!-- STAT CARDS -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 anim-up d-1">
 
                 <!-- Present -->
@@ -596,11 +604,10 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                         </div>
                     </div>
                     <div class="mt-4">
-                        <!-- Toggle show/hide archived rows -->
                         <label class="flex items-center gap-2 cursor-pointer select-none mt-1">
                             <div class="relative">
                                 <input type="checkbox" id="showArchived" class="sr-only" onchange="filterAttendance()">
-                                <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full transition-colors peer-checked:bg-amber-400" id="toggleTrack"></div>
+                                <div class="w-9 h-5 bg-gray-200 dark:bg-gray-600 rounded-full transition-colors" id="toggleTrack"></div>
                                 <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform" id="toggleDot"></div>
                             </div>
                             <span class="text-xs text-gray-500 dark:text-gray-400">Show archived</span>
@@ -608,7 +615,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                     </div>
                 </div>
             </div>
-
 
             <?php if (empty($allAttendanceRecords)): ?>
                 <!-- EMPTY STATE -->
@@ -653,7 +659,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                                     <th class="px-5 py-3.5 text-left">Log In</th>
                                     <th class="px-5 py-3.5 text-left">Log Out</th>
                                     <th class="px-5 py-3.5 text-left">Status</th>
-                                    <!-- NEW: Proof image column -->
                                     <th class="px-5 py-3.5 text-left">Proof</th>
                                     <th class="px-5 py-3.5 text-left">Actions</th>
                                 </tr>
@@ -712,7 +717,7 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                                             <?= htmlspecialchars($rec['event_title']) ?>
                                         </span>
                                         <?php if ($isArchived): ?>
-                                            <span class="block text-[10px] text-amber-500 font-semibold mt-0.5"><i class="fas fa-box-archive mr-1"></i>Archived</span>
+                                            <span class="archived-badge block text-[10px] text-amber-500 font-semibold mt-0.5"><i class="fas fa-box-archive mr-1"></i>Archived</span>
                                         <?php endif; ?>
                                     </td>
 
@@ -761,10 +766,9 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                                         </span>
                                     </td>
 
-                                    <!-- ── NEW: Proof image cell ── -->
+                                    <!-- Proof image cell -->
                                     <td class="px-5 py-4">
                                         <?php if ($hasProof): ?>
-                                            <!-- Thumbnail — clicking loads full image via AJAX then opens lightbox -->
                                             <img src="/images/proof-placeholder.png"
                                                  alt="Proof"
                                                  class="proof-thumb"
@@ -779,30 +783,37 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                                         <?php endif; ?>
                                     </td>
 
-                                    <!-- ── Action buttons ── -->
+                                    <!-- ── Action buttons — DIFFERENT for archived vs active ── -->
                                     <td class="px-5 py-4">
                                         <div class="flex items-center gap-1.5">
-                                            <!-- Details / Edit (opens fraud-detection edit modal) -->
-                                            <button onclick="openDetailsModal(this)"
-                                                class="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all active:scale-95"
-                                                title="View / Edit">
-                                                <i class="fas fa-clock-rotate-left text-xs"></i>
-                                            </button>
 
-                                            <!-- Archive / Unarchive -->
                                             <?php if (!$isArchived): ?>
-                                                <button onclick="archiveRecord(this)"
+                                                <!-- ACTIVE ROW: Details + Archive -->
+                                                <button onclick="openDetailsModal(this)"
+                                                    class="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all active:scale-95"
+                                                    title="View / Edit">
+                                                    <i class="fas fa-clock-rotate-left text-xs"></i>
+                                                </button>
+                                                <button onclick="openArchiveModal(this)"
                                                     class="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-amber-500 border border-gray-200 dark:border-gray-600 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all active:scale-95"
-                                                    title="Archive">
+                                                    title="Archive record">
                                                     <i class="fas fa-box-archive text-xs"></i>
                                                 </button>
+
                                             <?php else: ?>
-                                                <button onclick="unarchiveRecord(this)"
-                                                    class="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-100 dark:bg-amber-900/30 text-amber-600 border border-amber-200 dark:border-amber-800 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all active:scale-95"
-                                                    title="Unarchive">
-                                                    <i class="fas fa-box-open text-xs"></i>
+                                                <!-- ARCHIVED ROW: Restore + Delete -->
+                                                <button onclick="openRestoreModal(this)"
+                                                    class="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all active:scale-95"
+                                                    title="Restore record">
+                                                    <i class="fas fa-rotate-left text-xs"></i>
+                                                </button>
+                                                <button onclick="openDeleteModal(this)"
+                                                    class="w-8 h-8 rounded-lg flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95"
+                                                    title="Delete permanently">
+                                                    <i class="fas fa-trash text-xs"></i>
                                                 </button>
                                             <?php endif; ?>
+
                                         </div>
                                     </td>
                                 </tr>
@@ -822,30 +833,23 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
         </main>
     </div>
 
-
-    <!-- ── SCROLL TO TOP ────────────────────────────────────── -->
+    <!-- SCROLL TO TOP -->
     <button onclick="window.scrollTo({top:0,behavior:'smooth'})"
         class="fixed bottom-5 right-5 w-10 h-10 rounded-full z-40 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 shadow-lg hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all hover:scale-110 active:scale-95 flex items-center justify-center group">
         <i class="fas fa-chevron-up text-sm group-hover:-translate-y-0.5 transition-transform"></i>
     </button>
 
 
-    <!-- ═══════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════
          PROOF IMAGE LIGHTBOX
-         Opens when clicking a proof thumbnail. Image is loaded
-         via AJAX (GET ?action=get_proof&id=X) on first click.
-    ═══════════════════════════════════════════════════════ -->
+    ═══════════════════════════════════════════════════ -->
     <div id="proofLightbox"
         class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/80"
         onclick="if(event.target===this||event.target.id==='proofLightbox')closeProofLightbox()">
-
-        <!-- Loading spinner — visible while AJAX is in flight -->
         <div id="proofSpinner" class="hidden flex-col items-center gap-3 text-white">
             <i class="fas fa-spinner fa-spin text-3xl"></i>
             <p class="text-sm">Loading proof image…</p>
         </div>
-
-        <!-- Actual lightbox image -->
         <div id="proofLightboxInner" class="hidden flex-col items-center gap-4">
             <div class="flex items-center justify-between w-full max-w-lg px-2">
                 <p class="text-white text-sm font-semibold opacity-80">
@@ -861,23 +865,16 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
     </div>
 
 
-    <!-- ═══════════════════════════════════════════════════════
+    <!-- ═══════════════════════════════════════════════════
          DETAILS + EDIT MODAL
-         Shows attendance details AND a fraud-detection panel:
-         proof photo vs student account photo side-by-side,
-         with an editable Present / Absent toggle.
-    ═══════════════════════════════════════════════════════ -->
+    ═══════════════════════════════════════════════════ -->
     <div id="detailsModal"
         class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/60"
         style="backdrop-filter:blur(6px)"
         onclick="if(event.target===this)closeDetailsModal()">
 
-        <div class="modal-pop bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg
-                    border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
-
+        <div class="modal-pop bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
             <div class="h-1.5 bg-gradient-to-r from-brand-400 to-blue-500"></div>
-
-            <!-- Modal header -->
             <div class="flex items-center gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <span class="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center">
                     <i class="fas fa-user-clock"></i>
@@ -892,15 +889,7 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
             </div>
 
             <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-
-                <!-- ── FRAUD DETECTION PANEL ─────────────────────
-                     Side-by-side: Proof photo (what the camera
-                     captured) vs Account photo (who is registered).
-                     If faces differ → likely fraud / proxy scan.
-                ──────────────────────────────────────────────── -->
                 <div class="side-by-side-panel">
-
-                    <!-- Proof photo (lazy-loaded from server) -->
                     <div class="fraud-card proof-card">
                         <p class="text-[10px] uppercase font-bold text-brand-700 dark:text-brand-300 mb-2 flex items-center justify-center gap-1">
                             <i class="fas fa-camera"></i> Scan Proof
@@ -911,27 +900,24 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                             </div>
                             <img id="modalProofImg" src="" alt="Proof" class="fraud-img w-20 h-20 object-cover rounded-lg hidden">
                             <div id="modalNoProof" class="fraud-init text-gray-300 dark:text-gray-600 bg-gray-100 dark:bg-gray-700 rounded-lg hidden">
-                                <i class="fas fa-image-slash text-xl"></i>
+                                <i class="fas fa-image text-xl"></i>
                             </div>
                         </div>
                         <p class="text-[11px] text-brand-600 dark:text-brand-400 mt-2 font-medium">Photo at scan time</p>
                     </div>
-
-                    <!-- Account photo (from student profile) -->
                     <div class="fraud-card account-card">
                         <p class="text-[10px] uppercase font-bold text-blue-700 dark:text-blue-300 mb-2 flex items-center justify-center gap-1">
                             <i class="fas fa-id-card"></i> Account
                         </p>
                         <div class="flex items-center justify-center">
                             <img id="modalStudentPhoto" src="" alt="Student" class="fraud-img w-20 h-20 object-cover rounded-lg hidden border-2 border-blue-200 dark:border-blue-800">
-                            <span id="modalStudentInitial" class="fraud-init w-20 h-20 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">J</span>
+                            <span id="modalStudentInitial" class="fraud-init w-20 h-20 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">?</span>
                         </div>
                         <p class="font-semibold text-gray-900 dark:text-white text-sm mt-2" id="modalStudentName">—</p>
                         <div id="modalStatusBadge" class="mt-1 flex justify-center"></div>
                     </div>
                 </div>
 
-                <!-- Fraud warning banner — shown by JS if mismatch suspected -->
                 <div id="fraudWarning" class="hidden items-center gap-3 px-4 py-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-orange-700 dark:text-orange-400">
                     <i class="fas fa-triangle-exclamation text-lg flex-shrink-0"></i>
                     <div>
@@ -940,7 +926,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                     </div>
                 </div>
 
-                <!-- Login / Logout time grid -->
                 <div class="grid grid-cols-2 gap-3">
                     <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4">
                         <p class="text-[10px] uppercase font-semibold text-gray-400 mb-1 flex items-center gap-1">
@@ -956,7 +941,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                     </div>
                 </div>
 
-                <!-- Duration -->
                 <div class="flex items-center justify-between bg-gradient-to-r from-brand-50 to-blue-50 dark:from-brand-900/20 dark:to-blue-900/20 border border-brand-200 dark:border-brand-800 rounded-xl px-5 py-4">
                     <span class="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
                         <i class="fas fa-clock text-brand-500"></i> Duration
@@ -964,10 +948,6 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                     <span class="text-xl font-bold text-gray-900 dark:text-white" id="modalDuration">N/A</span>
                 </div>
 
-                <!-- ── EDIT STATUS ─────────────────────────────────
-                     Organizer can override Present / Absent after
-                     comparing the two photos in the fraud panel.
-                ──────────────────────────────────────────────── -->
                 <div class="border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-3">
                     <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide flex items-center gap-2">
                         <i class="fas fa-pen text-brand-400"></i> Edit Status
@@ -980,15 +960,13 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
                             <i class="fas fa-times-circle mr-1.5"></i> Absent
                         </button>
                     </div>
-                    <button id="btnSaveStatus"
-                        onclick="saveEditedStatus()"
+                    <button id="btnSaveStatus" onclick="saveEditedStatus()"
                         class="w-full py-2.5 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white transition-colors flex items-center justify-center gap-2 active:scale-95">
                         <i class="fas fa-save"></i> Save Status
                     </button>
                     <p id="editStatusMsg" class="text-xs text-center hidden"></p>
                 </div>
 
-                <!-- Close button -->
                 <button onclick="closeDetailsModal()" class="w-full py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2">
                     <i class="fas fa-times text-red-400"></i> Close
                 </button>
@@ -997,7 +975,149 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
     </div>
 
 
-    <!-- ── PHP → JS DATA BRIDGE ───────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════
+         CUSTOM MODAL: ARCHIVE CONFIRMATION
+         Replaces browser confirm() for archive action
+    ═══════════════════════════════════════════════════ -->
+    <div id="archiveModal"
+        class="confirm-modal-wrap fixed inset-0 z-[70] hidden items-center justify-center p-4 bg-black/60"
+        onclick="if(event.target===this)closeArchiveModal()">
+        <div class="confirm-modal-card bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+            <div class="h-1 bg-gradient-to-r from-amber-400 to-orange-400"></div>
+            <div class="p-6">
+                <!-- Icon -->
+                <div class="w-14 h-14 rounded-2xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 flex items-center justify-center text-2xl mx-auto mb-4 border border-amber-200 dark:border-amber-800">
+                    <i class="fas fa-box-archive"></i>
+                </div>
+                <h3 class="text-center font-bold text-gray-900 dark:text-white text-lg mb-1">Archive Record?</h3>
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    This record will be hidden from the default view.
+                </p>
+                <p class="text-center text-xs text-gray-400 dark:text-gray-500 mb-6">
+                    You can restore it anytime from the archived view.
+                </p>
+
+                <!-- Student info preview -->
+                <div id="archiveModalInfo" class="mb-5 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                    <p class="text-xs font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-2 mb-1">
+                        <i class="fas fa-user-graduate"></i> <span id="archiveModalStudent">—</span>
+                    </p>
+                    <p class="text-xs text-amber-600 dark:text-amber-500 flex items-center gap-2">
+                        <i class="fas fa-calendar-alt"></i> <span id="archiveModalEvent">—</span>
+                    </p>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeArchiveModal()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button id="archiveModalConfirmBtn" onclick="confirmArchive()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fas fa-box-archive"></i> Archive
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════
+         CUSTOM MODAL: RESTORE CONFIRMATION
+         Shown for archived records — restore to active
+    ═══════════════════════════════════════════════════ -->
+    <div id="restoreModal"
+        class="confirm-modal-wrap fixed inset-0 z-[70] hidden items-center justify-center p-4 bg-black/60"
+        onclick="if(event.target===this)closeRestoreModal()">
+        <div class="confirm-modal-card bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden">
+            <div class="h-1 bg-gradient-to-r from-brand-400 to-emerald-400"></div>
+            <div class="p-6">
+                <div class="w-14 h-14 rounded-2xl bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-2xl mx-auto mb-4 border border-brand-200 dark:border-brand-800">
+                    <i class="fas fa-rotate-left"></i>
+                </div>
+                <h3 class="text-center font-bold text-gray-900 dark:text-white text-lg mb-1">Restore Record?</h3>
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    This record will be moved back to the active view.
+                </p>
+                <p class="text-center text-xs text-gray-400 dark:text-gray-500 mb-6">
+                    It will appear in the main attendance list again.
+                </p>
+
+                <div id="restoreModalInfo" class="mb-5 px-4 py-3 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800">
+                    <p class="text-xs font-semibold text-brand-700 dark:text-brand-400 flex items-center gap-2 mb-1">
+                        <i class="fas fa-user-graduate"></i> <span id="restoreModalStudent">—</span>
+                    </p>
+                    <p class="text-xs text-brand-600 dark:text-brand-500 flex items-center gap-2">
+                        <i class="fas fa-calendar-alt"></i> <span id="restoreModalEvent">—</span>
+                    </p>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeRestoreModal()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button id="restoreModalConfirmBtn" onclick="confirmRestore()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white transition-colors flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fas fa-rotate-left"></i> Restore
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ═══════════════════════════════════════════════════
+         CUSTOM MODAL: DELETE CONFIRMATION (DANGER)
+         Permanent deletion — red/danger styling
+    ═══════════════════════════════════════════════════ -->
+    <div id="deleteModal"
+        class="confirm-modal-wrap fixed inset-0 z-[70] hidden items-center justify-center p-4 bg-black/60"
+        onclick="if(event.target===this)closeDeleteModal()">
+        <div class="confirm-modal-card bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm border border-red-200 dark:border-red-900 shadow-2xl overflow-hidden">
+            <div class="h-1 bg-gradient-to-r from-red-500 to-rose-500"></div>
+            <div class="p-6">
+                <div class="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center text-2xl mx-auto mb-4 border border-red-200 dark:border-red-800">
+                    <i class="fas fa-trash-can"></i>
+                </div>
+                <h3 class="text-center font-bold text-gray-900 dark:text-white text-lg mb-1">Delete Permanently?</h3>
+                <p class="text-center text-sm text-gray-500 dark:text-gray-400 mb-1">
+                    This action <strong class="text-red-500">cannot be undone.</strong>
+                </p>
+                <p class="text-center text-xs text-gray-400 dark:text-gray-500 mb-6">
+                    The attendance record will be permanently removed from the system.
+                </p>
+
+                <!-- Warning box -->
+                <div class="mb-5 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                    <p class="text-xs font-semibold text-red-700 dark:text-red-400 flex items-center gap-2 mb-1">
+                        <i class="fas fa-user-graduate"></i> <span id="deleteModalStudent">—</span>
+                    </p>
+                    <p class="text-xs text-red-600 dark:text-red-500 flex items-center gap-2 mb-2">
+                        <i class="fas fa-calendar-alt"></i> <span id="deleteModalEvent">—</span>
+                    </p>
+                    <div class="flex items-center gap-2 pt-2 border-t border-red-200 dark:border-red-800">
+                        <i class="fas fa-triangle-exclamation text-red-500 text-xs flex-shrink-0"></i>
+                        <p class="text-[11px] text-red-600 dark:text-red-400 font-medium">All data including proof images will be deleted.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeDeleteModal()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button id="deleteModalConfirmBtn" onclick="confirmDelete()"
+                        class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-colors flex items-center justify-center gap-2 active:scale-95">
+                        <i class="fas fa-trash-can"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- PHP → JS DATA BRIDGE -->
     <script>
         const SEMS_ATTENDANCE_DATA = {
             exportDate: "<?= date('Y-m-d') ?>",
