@@ -211,6 +211,154 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_event_type']))
     }
     exit();
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── ADD ANNOUNCEMENT HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_announcement'])) {
+    header('Content-Type: application/json');
+    $title      = trim($_POST['title']      ?? '');
+    $body       = trim($_POST['body']       ?? '');
+    $visibility = trim($_POST['visibility'] ?? 'all');
+    $is_pinned  = intval($_POST['is_pinned'] ?? 0) ? 1 : 0;
+    $org_id     = (isset($_POST['org_id'])  && $_POST['org_id']  !== '') ? intval($_POST['org_id'])  : null;
+    $club_id    = (isset($_POST['club_id']) && $_POST['club_id'] !== '') ? intval($_POST['club_id']) : null;
+    $dept_id    = (isset($_POST['dept_id']) && $_POST['dept_id'] !== '') ? intval($_POST['dept_id']) : null;
+
+    if ($title === '' || $body === '') {
+        echo json_encode(['success' => false, 'message' => 'Title and body are required.']); exit();
+    }
+    if (!in_array($visibility, ['all', 'dept', 'club'])) $visibility = 'all';
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO announcements (title, body, organizer_id, org_id, club_id, dept_id, visibility, is_pinned)
+            VALUES (:title, :body, :org_id_val, :org_id, :club_id, :dept_id, :vis, :pinned)
+        ");
+        $stmt->execute([
+            ':title'      => $title,
+            ':body'       => $body,
+            ':org_id_val' => $currentAdminId,
+            ':org_id'     => $org_id,
+            ':club_id'    => $club_id,
+            ':dept_id'    => $dept_id,
+            ':vis'        => $visibility,
+            ':pinned'     => $is_pinned,
+        ]);
+        $newId = (int) $pdo->lastInsertId();
+
+        $orgName = null; $clubName = null; $deptName = null;
+        if ($org_id)  { $r = $pdo->prepare("SELECT org_name  FROM organizations WHERE org_id  = :id"); $r->execute([':id' => $org_id]);  $orgName  = $r->fetchColumn() ?: null; }
+        if ($club_id) { $r = $pdo->prepare("SELECT club_name FROM clubs         WHERE club_id = :id"); $r->execute([':id' => $club_id]); $clubName = $r->fetchColumn() ?: null; }
+        if ($dept_id) { $r = $pdo->prepare("SELECT dept_name FROM departments  WHERE dept_id = :id"); $r->execute([':id' => $dept_id]); $deptName = $r->fetchColumn() ?: null; }
+
+        $an = $pdo->prepare("
+            SELECT COALESCE(
+                CONCAT(adm.first_name, ' ', adm.last_name),
+                CONCAT(org.first_name, ' ', org.last_name),
+                u.email
+            ) AS name
+            FROM users u
+            LEFT JOIN admin    adm ON u.user_id = adm.user_id
+            LEFT JOIN organizer org ON u.user_id = org.user_id
+            WHERE u.user_id = :id
+            LIMIT 1
+        ");
+        $an->execute([':id' => $currentAdminId]);
+        $adminName = $an->fetchColumn() ?: 'Unknown';
+
+        $affStmt = $pdo->prepare("
+            SELECT COALESCE(uo.org_name, uc.club_name) AS poster_affiliation
+            FROM users u
+            LEFT JOIN organizations uo ON u.org_id  = uo.org_id
+            LEFT JOIN clubs         uc ON u.club_id = uc.club_id
+            WHERE u.user_id = :id
+            LIMIT 1
+        ");
+        $affStmt->execute([':id' => $currentAdminId]);
+        $posterAffiliation = $affStmt->fetchColumn() ?: null;
+
+        echo json_encode(['success' => true, 'announcement' => [
+            'announcement_id'   => $newId,
+            'title'             => $title,
+            'body'              => $body,
+            'visibility'        => $visibility,
+            'is_pinned'         => $is_pinned,
+            'org_id'            => $org_id,
+            'club_id'           => $club_id,
+            'dept_id'           => $dept_id,
+            'org_name'          => $orgName,
+            'club_name'         => $clubName,
+            'dept_name'         => $deptName,
+            'organizer_name'    => $adminName,
+            'poster_affiliation'=> $posterAffiliation,
+            'created_at'        => date('Y-m-d H:i:s'),
+        ]]);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── EDIT ANNOUNCEMENT HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_announcement'])) {
+    header('Content-Type: application/json');
+    $id         = intval($_POST['announcement_id'] ?? 0);
+    $title      = trim($_POST['title']      ?? '');
+    $body       = trim($_POST['body']       ?? '');
+    $visibility = trim($_POST['visibility'] ?? 'all');
+    $is_pinned  = intval($_POST['is_pinned'] ?? 0) ? 1 : 0;
+    $org_id     = (isset($_POST['org_id'])  && $_POST['org_id']  !== '') ? intval($_POST['org_id'])  : null;
+    $club_id    = (isset($_POST['club_id']) && $_POST['club_id'] !== '') ? intval($_POST['club_id']) : null;
+    $dept_id    = (isset($_POST['dept_id']) && $_POST['dept_id'] !== '') ? intval($_POST['dept_id']) : null;
+
+    if ($id <= 0 || $title === '' || $body === '') {
+        echo json_encode(['success' => false, 'message' => 'Invalid data.']); exit();
+    }
+    if (!in_array($visibility, ['all', 'dept', 'club'])) $visibility = 'all';
+
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE announcements
+            SET title = :title, body = :body, visibility = :vis, is_pinned = :pinned,
+                org_id = :org_id, club_id = :club_id, dept_id = :dept_id
+            WHERE announcement_id = :id AND deleted_at IS NULL
+        ");
+        $stmt->execute([
+            ':title'   => $title, ':body'    => $body,
+            ':vis'     => $visibility, ':pinned' => $is_pinned,
+            ':org_id'  => $org_id, ':club_id' => $club_id,
+            ':dept_id' => $dept_id, ':id'     => $id,
+        ]);
+        echo json_encode($stmt->rowCount() > 0
+            ? ['success' => true]
+            : ['success' => false, 'message' => 'Announcement not found.']);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── DELETE ANNOUNCEMENT HANDLER ──
+// ═══════════════════════════════════════════════════════════════════════════════
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_announcement'])) {
+    header('Content-Type: application/json');
+    $id = intval($_POST['announcement_id'] ?? 0);
+    if ($id <= 0) { echo json_encode(['success' => false, 'message' => 'Invalid ID.']); exit(); }
+    try {
+        $stmt = $pdo->prepare("DELETE FROM announcements WHERE announcement_id = :id");
+        $stmt->execute([':id' => $id]);
+        echo json_encode($stmt->rowCount() > 0
+            ? ['success' => true]
+            : ['success' => false, 'message' => 'Announcement not found.']);
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit();
+}
  
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FETCH ADMIN PROFILE DATA ──
@@ -223,12 +371,12 @@ $adminStmt = $pdo->prepare("
 $adminStmt->execute(['id' => $currentAdminId]);
 $adminData = $adminStmt->fetch(PDO::FETCH_ASSOC);
  
-$adminFirstName = $adminData['first_name'] ?? '';
-$adminLastName  = $adminData['last_name']  ?? '';
-$adminMiddleName= $adminData['middle_name'] ?? '';
-$adminFullName  = trim($adminFirstName . ' ' . $adminMiddleName . ' ' . $adminLastName);
-$adminFullName  = $adminFullName !== '' ? htmlspecialchars($adminFullName) : 'Administrator';
-$adminAvatar    = '';
+$adminFirstName  = $adminData['first_name']  ?? '';
+$adminLastName   = $adminData['last_name']   ?? '';
+$adminMiddleName = $adminData['middle_name'] ?? '';
+$adminFullName   = trim($adminFirstName . ' ' . $adminMiddleName . ' ' . $adminLastName);
+$adminFullName   = $adminFullName !== '' ? htmlspecialchars($adminFullName) : 'Administrator';
+$adminAvatar     = '';
 if (!empty($adminData['profile_image'])) {
     $adminAvatar = 'data:image/jpeg;base64,' . base64_encode($adminData['profile_image']);
 }
@@ -242,8 +390,8 @@ $stmtActive = $pdo->query("
            e.start_datetime, e.end_datetime,
            COALESCE(o.org_name, c.club_name, 'N/A') AS org
     FROM events e
-    LEFT JOIN organizations o ON e.org_id   = o.org_id
-    LEFT JOIN clubs c         ON e.club_id  = c.club_id
+    LEFT JOIN organizations o ON e.org_id  = o.org_id
+    LEFT JOIN clubs c         ON e.club_id = c.club_id
     WHERE e.deleted_at IS NULL ORDER BY e.created_at DESC
 ");
 $events = $stmtActive->fetchAll(PDO::FETCH_ASSOC);
@@ -276,8 +424,7 @@ $venues = $stmtVenues->fetchAll(PDO::FETCH_ASSOC);
 // ── FETCH EVENT TYPES ──
 // ═══════════════════════════════════════════════════════════════════════════════
 $stmtTypes = $pdo->query("
-    SELECT et.type_id, et.type_name, et.org_id, et.club_id,
-           o.org_name, c.club_name
+    SELECT et.type_id, et.type_name, et.org_id, et.club_id, o.org_name, c.club_name
     FROM event_types et
     LEFT JOIN organizations o ON et.org_id  = o.org_id
     LEFT JOIN clubs c         ON et.club_id = c.club_id
@@ -292,6 +439,40 @@ $stmtOrgs  = $pdo->query("SELECT org_id, org_name FROM organizations WHERE delet
 $orgs      = $stmtOrgs->fetchAll(PDO::FETCH_ASSOC);
 $stmtClubs = $pdo->query("SELECT club_id, club_name FROM clubs WHERE deleted_at IS NULL ORDER BY club_name");
 $clubs     = $stmtClubs->fetchAll(PDO::FETCH_ASSOC);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── FETCH DEPARTMENTS ──
+// ═══════════════════════════════════════════════════════════════════════════════
+$stmtDepts = $pdo->query("SELECT dept_id, dept_name FROM departments ORDER BY dept_name");
+$depts     = $stmtDepts->fetchAll(PDO::FETCH_ASSOC);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── FETCH ANNOUNCEMENTS ──
+// ═══════════════════════════════════════════════════════════════════════════════
+$stmtAnn = $pdo->query("
+    SELECT an.announcement_id, an.title, an.body, an.visibility, an.is_pinned,
+           an.org_id, an.club_id, an.dept_id, an.created_at,
+           o.org_name, c.club_name, d.dept_name,
+           COALESCE(
+               CONCAT(adm.first_name, ' ', adm.last_name),
+               CONCAT(orgp.first_name, ' ', orgp.last_name),
+               u.email
+           ) AS organizer_name,
+           COALESCE(uo.org_name, uc.club_name) AS poster_affiliation,
+           u.role AS organizer_role
+    FROM announcements an
+    LEFT JOIN users u            ON an.organizer_id = u.user_id
+    LEFT JOIN admin adm          ON an.organizer_id = adm.user_id
+    LEFT JOIN organizer orgp     ON an.organizer_id = orgp.user_id
+    LEFT JOIN organizations o    ON an.org_id       = o.org_id
+    LEFT JOIN clubs c            ON an.club_id      = c.club_id
+    LEFT JOIN departments d      ON an.dept_id      = d.dept_id
+    LEFT JOIN organizations uo   ON u.org_id        = uo.org_id
+    LEFT JOIN clubs uc           ON u.club_id       = uc.club_id
+    WHERE an.deleted_at IS NULL
+    ORDER BY an.is_pinned DESC, an.created_at DESC
+");
+$announcements = $stmtAnn->fetchAll(PDO::FETCH_ASSOC);
  
 // ── STATISTICS ──
 $totalEvents    = count($events);
@@ -299,6 +480,7 @@ $approvedEvents = count(array_filter($events, fn($e) => $e['status'] === 'approv
 $pendingEvents  = count(array_filter($events, fn($e) => $e['status'] === 'pending'));
 $rejectedEvents = count(array_filter($events, fn($e) => $e['status'] === 'rejected'));
 $archivedCount  = count($archivedEvents);
+$annCount       = count($announcements);
  
 // ── JSON BRIDGE ──
 $flags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT;
@@ -308,6 +490,8 @@ $venueDataJson         = json_encode($venues,         $flags);
 $eventTypeDataJson     = json_encode($eventTypes,     $flags);
 $orgDataJson           = json_encode($orgs,           $flags);
 $clubDataJson          = json_encode($clubs,          $flags);
+$deptDataJson          = json_encode($depts,          $flags);
+$announcementDataJson  = json_encode($announcements,  $flags);
 ?>
  
 <!DOCTYPE html>
@@ -514,18 +698,27 @@ $clubDataJson          = json_encode($clubs,          $flags);
                             <i class="fas fa-calendar-alt"></i> Active Events
                         </button>
                         <button id="view-archived-btn" onclick="showArchivedView()"
-                            class="px-4 py-2.5 text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200">
+                            class="px-4 py-2.5 text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 border-l border-gray-200 dark:border-slate-700 transition-all duration-200">
                             <i class="fas fa-archive"></i>
                             Archived
                             <?php if ($archivedCount > 0): ?>
-                                <span class="ml-1 w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 text-[10px] font-bold flex items-center justify-center">
+                                <span class="ml-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 text-[10px] font-bold inline-flex items-center justify-center">
                                     <?= $archivedCount ?>
+                                </span>
+                            <?php endif; ?>
+                        </button>
+                        <button id="view-announcements-btn" onclick="showAnnouncementsView()"
+                            class="px-4 py-2.5 text-xs font-semibold flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 border-l border-gray-200 dark:border-slate-700 transition-all duration-200">
+                            <i class="fas fa-bullhorn"></i>
+                            Announcements
+                            <?php if ($annCount > 0): ?>
+                                <span class="ann-count-badge ml-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold inline-flex items-center justify-center">
+                                    <?= $annCount ?>
                                 </span>
                             <?php endif; ?>
                         </button>
                     </div>
 
-                    <!-- ── MANAGE VENUES & TYPES BUTTON ── -->
                     <button onclick="openManageModal()"
                         class="ml-auto inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold
                                bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
@@ -540,8 +733,6 @@ $clubDataJson          = json_encode($clubs,          $flags);
  
                 <!-- ── ACTIVE EVENTS SECTION ── -->
                 <div id="active-section">
- 
-                    <!-- Filter Tabs -->
                     <div class="flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-up" style="animation-delay:.1s">
                         <div class="flex gap-2 flex-wrap">
                             <button id="tab-all" onclick="setFilter('all')"
@@ -569,7 +760,6 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         </div>
                     </div>
  
-                    <!-- Active Events Table -->
                     <div class="animate-fade-up bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" style="animation-delay:.15s">
                         <div class="px-6 py-5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between flex-wrap gap-3">
                             <div>
@@ -656,21 +846,181 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         </div>
                     </div>
                 </div>
+
+                <!-- ── ANNOUNCEMENTS SECTION ── -->
+                <div id="announcements-section" class="hidden space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-up">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                                <i class="fas fa-bullhorn text-indigo-500 text-sm"></i>
+                            </div>
+                            <p class="font-bold text-slate-900 dark:text-white">Announcements</p>
+                        </div>
+                        <div class="sm:ml-auto flex items-center gap-3 flex-wrap">
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                                <input id="annSearch" type="text" placeholder="Search announcements..."
+                                    oninput="filterAnnouncements()"
+                                    class="pl-9 pr-4 py-2 text-sm rounded-xl bg-gray-100 dark:bg-slate-700 border-0 focus:outline-none focus:ring-2 focus:ring-primary-500/30 text-slate-700 dark:text-slate-200 placeholder-slate-400 transition-all duration-200 w-56" />
+                            </div>
+                            <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
+                                <i class="fas fa-bullhorn mr-1.5 text-indigo-500"></i>
+                                <span id="ann-result-num">0</span> announcements
+                            </span>
+                            <button onclick="openAnnModal(null)"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold
+                                       bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm shadow-indigo-500/30 transition-all duration-200">
+                                <i class="fas fa-plus"></i> New Announcement
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-3 px-4 py-3 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl text-sm text-indigo-700 dark:text-indigo-300 animate-fade-up">
+                        <i class="fas fa-info-circle flex-shrink-0"></i>
+                        <span>All announcements posted by organizers are visible here. You can edit content, change visibility, pin important announcements, or remove them.</span>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm min-w-[750px]">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-700/50">
+                                        <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Title &amp; Preview</th>
+                                        <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Posted By</th>
+                                        <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Visibility</th>
+                                        <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Date</th>
+                                        <th class="px-6 py-4 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ann-table-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
+                            </table>
+                        </div>
+                        <div id="ann-empty-state" class="hidden px-4 py-12 text-center">
+                            <div class="w-16 h-16 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-bullhorn text-gray-400 text-2xl"></i>
+                            </div>
+                            <p class="text-slate-900 dark:text-white font-medium">No announcements yet</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Click "New Announcement" to post the first one.</p>
+                        </div>
+                    </div>
+                </div>
  
                 <div class="h-4"></div>
             </div>
         </main>
     </div>
- 
-    <!-- ════════════════════════════════════════════════════════════
-         ── MANAGE VENUES & EVENT TYPES MODAL (main list) ──
-         ════════════════════════════════════════════════════════════ -->
+
+    <!-- ── ANNOUNCEMENT FORM MODAL (Add / Edit) ── -->
+    <div id="annModal" class="fixed inset-0 z-[150] hidden">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeAnnModal()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-slate-700 my-8 flex flex-col max-h-[90vh]">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                            <i class="fas fa-bullhorn text-indigo-500 text-sm"></i>
+                        </div>
+                        <div>
+                            <p id="annFormTitle" class="font-bold text-slate-900 dark:text-white text-sm">New Announcement</p>
+                            <p class="text-xs text-slate-400">Fill in the details below</p>
+                        </div>
+                    </div>
+                    <button onclick="closeAnnModal()"
+                        class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                        <i class="fas fa-times text-sm"></i>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Title <span class="text-rose-500">*</span></label>
+                        <input id="annTitleInput" type="text" placeholder="e.g. Enrollment Reminder"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Body <span class="text-rose-500">*</span></label>
+                        <textarea id="annBodyInput" rows="5" placeholder="Write the announcement content here…"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200 resize-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Visibility</label>
+                        <select id="annVisSelect"
+                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                            <option value="all">All Students</option>
+                            <option value="dept">Department Only</option>
+                            <option value="club">Club Members Only</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Organization <span class="text-slate-400 font-normal normal-case">(opt.)</span></label>
+                            <select id="annOrgSelect"
+                                class="w-full px-3 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                                <option value="">— None —</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Club <span class="text-slate-400 font-normal normal-case">(opt.)</span></label>
+                            <select id="annClubSelect"
+                                class="w-full px-3 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                                <option value="">— None —</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Department <span class="text-slate-400 font-normal normal-case">(opt.)</span></label>
+                            <select id="annDeptSelect"
+                                class="w-full px-3 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                                <option value="">— None —</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label class="flex items-center gap-3 cursor-pointer select-none p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                        <input id="annPinnedInput" type="checkbox" class="w-4 h-4 accent-amber-500 rounded" />
+                        <span class="text-sm font-medium text-amber-700 dark:text-amber-400">
+                            <i class="fas fa-thumbtack mr-1"></i> Pin this announcement (shows at top for all users)
+                        </span>
+                    </label>
+                </div>
+                <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3 flex-shrink-0">
+                    <button onclick="closeAnnModal()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="annFormSubmitBtn" onclick="submitAnnForm()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-indigo-500 hover:bg-indigo-600 text-white shadow-sm shadow-indigo-500/30 transition-all duration-200">
+                        <i class="fas fa-paper-plane"></i> Post Announcement
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ANNOUNCEMENT DELETE CONFIRM MODAL ── -->
+    <div id="annDeleteModal" class="fixed inset-0 z-[300] hidden">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeAnnDeleteModal()"></div>
+        <div class="absolute inset-0 flex items-center justify-center p-4">
+            <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs border border-rose-200 dark:border-rose-500/40 text-center p-6">
+                <div class="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-trash-alt text-rose-500 text-lg"></i>
+                </div>
+                <p class="font-bold text-slate-900 dark:text-white mb-1">Delete Announcement?</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-1 leading-relaxed">
+                    You are about to delete <strong id="annDeleteTitle" class="text-slate-900 dark:text-white"></strong>. This action cannot be undone.
+                </p>
+                <div class="flex gap-3 justify-center mt-5">
+                    <button onclick="closeAnnDeleteModal()"
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="annDeleteConfirmBtn" onclick="confirmAnnDelete()"
+                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200">
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── MANAGE VENUES & EVENT TYPES MODAL ── -->
     <div id="manageModal" class="fixed inset-0 z-[150] hidden">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeManageModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 overflow-y-auto">
             <div class="modal-enter relative bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-3xl border border-gray-200 dark:border-slate-700 my-8 flex flex-col max-h-[85vh]">
-
-                <!-- Header -->
                 <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700 flex-shrink-0">
                     <div class="flex items-center gap-3">
                         <div class="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center">
@@ -686,8 +1036,6 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         <i class="fas fa-times text-sm"></i>
                     </button>
                 </div>
-
-                <!-- Tabs -->
                 <div class="flex gap-2 px-6 pt-5 flex-shrink-0">
                     <button id="mgmt-tab-venues" onclick="switchManageTab('venues')"
                         class="px-4 py-2 rounded-xl text-xs font-semibold bg-primary-500 text-white shadow-sm transition-all duration-200">
@@ -698,24 +1046,20 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         <i class="fas fa-tags mr-1.5"></i> Event Types
                     </button>
                 </div>
-
-                <!-- Scrollable content -->
                 <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
 
                     <!-- ── VENUES PANEL ── -->
                     <div id="mgmt-venues-panel">
                         <div class="flex items-center justify-between mb-3">
-                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                                All Venues <span id="venue-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span>
-                            </p>
+                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">All Venues <span id="venue-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span></p>
                             <button onclick="openVenueForm(null)"
-                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
-                                       bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
                                 <i class="fas fa-plus"></i> Add Venue
                             </button>
                         </div>
-                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-                            <table class="w-full text-sm">
+                        <!-- FIX: overflow-x-auto added, min-w on table -->
+                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-x-auto">
+                            <table class="w-full text-sm min-w-[420px]">
                                 <thead>
                                     <tr class="bg-gray-50 dark:bg-slate-700/50">
                                         <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Venue Name</th>
@@ -726,28 +1070,25 @@ $clubDataJson          = json_encode($clubs,          $flags);
                                 <tbody id="venue-list-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
                             </table>
                             <div id="venue-empty-state" class="hidden py-10 text-center">
-                                <div class="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <i class="fas fa-map-marker-alt text-gray-400"></i>
-                                </div>
                                 <p class="text-slate-500 dark:text-slate-400 text-sm">No venues yet. Add one above.</p>
                             </div>
+                            <!-- Pagination injected here by JS -->
+                            <div id="venue-pagination"></div>
                         </div>
                     </div>
 
                     <!-- ── EVENT TYPES PANEL ── -->
                     <div id="mgmt-types-panel" class="hidden">
                         <div class="flex items-center justify-between mb-3">
-                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                                All Event Types <span id="type-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span>
-                            </p>
+                            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">All Event Types <span id="type-count-badge" class="ml-1.5 px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-normal"></span></p>
                             <button onclick="openTypeForm(null)"
-                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold
-                                       bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                                class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
                                 <i class="fas fa-plus"></i> Add Event Type
                             </button>
                         </div>
-                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-hidden">
-                            <table class="w-full text-sm">
+                        <!-- FIX: overflow-x-auto added, min-w on table -->
+                        <div class="rounded-xl border border-gray-100 dark:border-slate-700 overflow-x-auto">
+                            <table class="w-full text-sm min-w-[420px]">
                                 <thead>
                                     <tr class="bg-gray-50 dark:bg-slate-700/50">
                                         <th class="px-4 py-3 text-left font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Type Name</th>
@@ -758,30 +1099,23 @@ $clubDataJson          = json_encode($clubs,          $flags);
                                 <tbody id="type-list-body" class="divide-y divide-gray-100 dark:divide-slate-700"></tbody>
                             </table>
                             <div id="type-empty-state" class="hidden py-10 text-center">
-                                <div class="w-12 h-12 bg-gray-100 dark:bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <i class="fas fa-tags text-gray-400"></i>
-                                </div>
                                 <p class="text-slate-500 dark:text-slate-400 text-sm">No event types yet. Add one above.</p>
                             </div>
+                            <!-- Pagination injected here by JS -->
+                            <div id="type-pagination"></div>
                         </div>
                     </div>
 
-                </div><!-- /scrollable content -->
-
-                <!-- Footer -->
+                </div>
                 <div class="px-6 py-3 border-t border-gray-100 dark:border-slate-700 flex justify-end flex-shrink-0">
                     <button onclick="closeManageModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Close
-                    </button>
+                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Close</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ════════════════════════════════════════════════════════════
-         ── VENUE FORM MODAL (Add / Edit) ──
-         ════════════════════════════════════════════════════════════ -->
+    <!-- Venue form modal -->
     <div id="venueFormModal" class="fixed inset-0 z-[250] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeVenueForm()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -793,34 +1127,25 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         </div>
                         <p id="venueFormTitle" class="font-bold text-slate-900 dark:text-white text-sm">Add Venue</p>
                     </div>
-                    <button onclick="closeVenueForm()"
-                        class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                    <button onclick="closeVenueForm()" class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
                         <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>
                 <div class="px-6 py-5 space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                            Venue Name <span class="text-rose-500">*</span>
-                        </label>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Venue Name <span class="text-rose-500">*</span></label>
                         <input id="venueNameInput" type="text" placeholder="e.g. Main Gymnasium"
                             class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                            Capacity <span class="text-slate-400 font-normal normal-case">(optional)</span>
-                        </label>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Capacity <span class="text-slate-400 font-normal normal-case">(optional)</span></label>
                         <input id="venueCapInput" type="number" min="1" placeholder="e.g. 500"
                             class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
                     </div>
                 </div>
                 <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
-                    <button onclick="closeVenueForm()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="venueFormSubmitBtn" onclick="submitVenueForm()"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
+                    <button onclick="closeVenueForm()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="venueFormSubmitBtn" onclick="submitVenueForm()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary-500 hover:bg-primary-600 text-white shadow-sm shadow-primary-500/30 transition-all duration-200">
                         <i class="fas fa-save"></i> Save Venue
                     </button>
                 </div>
@@ -828,9 +1153,7 @@ $clubDataJson          = json_encode($clubs,          $flags);
         </div>
     </div>
 
-    <!-- ════════════════════════════════════════════════════════════
-         ── EVENT TYPE FORM MODAL (Add / Edit) ──
-         ════════════════════════════════════════════════════════════ -->
+    <!-- Event type form modal -->
     <div id="typeFormModal" class="fixed inset-0 z-[250] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeTypeForm()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -842,49 +1165,32 @@ $clubDataJson          = json_encode($clubs,          $flags);
                         </div>
                         <p id="typeFormTitle" class="font-bold text-slate-900 dark:text-white text-sm">Add Event Type</p>
                     </div>
-                    <button onclick="closeTypeForm()"
-                        class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                    <button onclick="closeTypeForm()" class="w-7 h-7 rounded-lg bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
                         <i class="fas fa-times text-xs"></i>
                     </button>
                 </div>
                 <div class="px-6 py-5 space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                            Type Name <span class="text-rose-500">*</span>
-                        </label>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Type Name <span class="text-rose-500">*</span></label>
                         <input id="typeNameInput" type="text" placeholder="e.g. Academic Symposium"
                             class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 placeholder-slate-400 transition-all duration-200" />
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                            Organization <span class="text-slate-400 font-normal normal-case">(optional)</span>
-                        </label>
-                        <select id="typeOrgSelect"
-                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Organization <span class="text-slate-400 font-normal normal-case">(optional)</span></label>
+                        <select id="typeOrgSelect" class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
                             <option value="">— None —</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
-                            Club <span class="text-slate-400 font-normal normal-case">(optional)</span>
-                        </label>
-                        <select id="typeClubSelect"
-                            class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 uppercase tracking-wider">Club <span class="text-slate-400 font-normal normal-case">(optional)</span></label>
+                        <select id="typeClubSelect" class="w-full px-4 py-2.5 text-sm rounded-xl bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 text-slate-800 dark:text-slate-200 transition-all duration-200">
                             <option value="">— None —</option>
                         </select>
                     </div>
-                    <p class="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                        <i class="fas fa-info-circle mr-1"></i>
-                        Linking to an org or club makes this type available only to that group. Leave both empty for a general type.
-                    </p>
                 </div>
                 <div class="px-6 py-4 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
-                    <button onclick="closeTypeForm()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="typeFormSubmitBtn" onclick="submitTypeForm()"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-600 text-white shadow-sm shadow-violet-500/30 transition-all duration-200">
+                    <button onclick="closeTypeForm()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="typeFormSubmitBtn" onclick="submitTypeForm()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-violet-500 hover:bg-violet-600 text-white shadow-sm shadow-violet-500/30 transition-all duration-200">
                         <i class="fas fa-save"></i> Save Type
                     </button>
                 </div>
@@ -892,9 +1198,7 @@ $clubDataJson          = json_encode($clubs,          $flags);
         </div>
     </div>
 
-    <!-- ════════════════════════════════════════════════════════════
-         ── MANAGE DELETE CONFIRMATION MODAL (shared) ──
-         ════════════════════════════════════════════════════════════ -->
+    <!-- Mgmt delete confirm -->
     <div id="mgmtDeleteModal" class="fixed inset-0 z-[300] hidden">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeMgmtDeleteModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -904,17 +1208,11 @@ $clubDataJson          = json_encode($clubs,          $flags);
                 </div>
                 <p class="font-bold text-slate-900 dark:text-white mb-1">Delete Item?</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-1 leading-relaxed">
-                    You are about to delete <strong id="mgmtDeleteName" class="text-slate-900 dark:text-white"></strong>.
-                    This cannot be undone.
+                    You are about to delete <strong id="mgmtDeleteName" class="text-slate-900 dark:text-white"></strong>. This cannot be undone.
                 </p>
-                <p id="mgmtDeleteInUseNote" class="hidden text-xs text-rose-500 mt-1">Cannot delete items currently used by events.</p>
                 <div class="flex gap-3 justify-center mt-5">
-                    <button onclick="closeMgmtDeleteModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="mgmtDeleteConfirmBtn" onclick="confirmMgmtDelete()"
-                        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200">
+                    <button onclick="closeMgmtDeleteModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="mgmtDeleteConfirmBtn" onclick="confirmMgmtDelete()" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200">
                         <i class="fas fa-trash-alt"></i> Delete
                     </button>
                 </div>
@@ -922,7 +1220,7 @@ $clubDataJson          = json_encode($clubs,          $flags);
         </div>
     </div>
 
-    <!-- ── VIEW EVENT MODAL ── -->
+    <!-- View event modal -->
     <div id="eventModal" class="fixed inset-0 z-[100] hidden">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4 overflow-y-auto">
@@ -937,23 +1235,19 @@ $clubDataJson          = json_encode($clubs,          $flags);
                             <p class="text-xs text-slate-400">Full event information</p>
                         </div>
                     </div>
-                    <button onclick="closeModal()"
-                        class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
+                    <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 flex items-center justify-center text-slate-500 transition-all duration-200">
                         <i class="fas fa-times text-sm"></i>
                     </button>
                 </div>
                 <div class="px-6 py-4 overflow-y-auto flex-1 space-y-4" id="modalBody"></div>
                 <div class="px-6 py-3 border-t border-gray-100 dark:border-slate-700 flex justify-end flex-shrink-0">
-                    <button onclick="closeModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Close
-                    </button>
+                    <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Close</button>
                 </div>
             </div>
         </div>
     </div>
  
-    <!-- ── ARCHIVE CONFIRMATION MODAL ── -->
+    <!-- Archive confirm -->
     <div id="archiveModal" class="fixed inset-0 z-[200] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeArchiveModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -963,16 +1257,11 @@ $clubDataJson          = json_encode($clubs,          $flags);
                 </div>
                 <p class="font-bold text-slate-900 dark:text-white mb-2 text-lg">Archive Event?</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
-                    <strong id="archiveEventTitle" class="text-slate-900 dark:text-white"></strong>
-                    will be hidden from all users but can be restored at any time.
+                    <strong id="archiveEventTitle" class="text-slate-900 dark:text-white"></strong> will be hidden from all users but can be restored at any time.
                 </p>
                 <div class="flex gap-3 justify-center mt-5">
-                    <button onclick="closeArchiveModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="confirmArchiveBtn" onclick="archiveEvent()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm shadow-amber-500/30 transition-all duration-200 flex items-center gap-2">
+                    <button onclick="closeArchiveModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="confirmArchiveBtn" onclick="archiveEvent()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm shadow-amber-500/30 transition-all duration-200 flex items-center gap-2">
                         <i class="fas fa-archive"></i> Archive
                     </button>
                 </div>
@@ -980,7 +1269,7 @@ $clubDataJson          = json_encode($clubs,          $flags);
         </div>
     </div>
  
-    <!-- ── RESTORE CONFIRMATION MODAL ── -->
+    <!-- Restore confirm -->
     <div id="restoreModal" class="fixed inset-0 z-[200] hidden">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeRestoreModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -990,16 +1279,11 @@ $clubDataJson          = json_encode($clubs,          $flags);
                 </div>
                 <p class="font-bold text-slate-900 dark:text-white mb-2 text-lg">Restore Event?</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
-                    <strong id="restoreEventTitle" class="text-slate-900 dark:text-white"></strong>
-                    will become visible to users again.
+                    <strong id="restoreEventTitle" class="text-slate-900 dark:text-white"></strong> will become visible to users again.
                 </p>
                 <div class="flex gap-3 justify-center mt-5">
-                    <button onclick="closeRestoreModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="confirmRestoreBtn" onclick="restoreEvent()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-500/30 transition-all duration-200 flex items-center gap-2">
+                    <button onclick="closeRestoreModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="confirmRestoreBtn" onclick="restoreEvent()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm shadow-emerald-500/30 transition-all duration-200 flex items-center gap-2">
                         <i class="fas fa-undo-alt"></i> Restore
                     </button>
                 </div>
@@ -1007,7 +1291,7 @@ $clubDataJson          = json_encode($clubs,          $flags);
         </div>
     </div>
  
-    <!-- ── PERMANENT DELETE CONFIRMATION MODAL ── -->
+    <!-- Permanent delete confirm -->
     <div id="permDeleteModal" class="fixed inset-0 z-[300] hidden">
         <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closePermDeleteModal()"></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -1018,28 +1302,16 @@ $clubDataJson          = json_encode($clubs,          $flags);
                 <p class="font-bold text-slate-900 dark:text-white mb-1 text-lg">Permanently Delete?</p>
                 <p class="text-xs font-semibold text-rose-500 uppercase tracking-wider mb-3">This cannot be undone</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-2 leading-relaxed">
-                    All data for <strong id="permDeleteEventTitle" class="text-slate-900 dark:text-white"></strong>
-                    — including registrations, attendance, and feedback — will be erased forever.
+                    All data for <strong id="permDeleteEventTitle" class="text-slate-900 dark:text-white"></strong> — including registrations, attendance, and feedback — will be erased forever.
                 </p>
                 <div class="flex gap-3 justify-center mt-5">
-                    <button onclick="closePermDeleteModal()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">
-                        Cancel
-                    </button>
-                    <button id="confirmPermDeleteBtn" onclick="permanentDeleteEvent()"
-                        class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200 flex items-center gap-2">
+                    <button onclick="closePermDeleteModal()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-600 transition-all duration-200">Cancel</button>
+                    <button id="confirmPermDeleteBtn" onclick="permanentDeleteEvent()" class="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-500/30 transition-all duration-200 flex items-center gap-2">
                         <i class="fas fa-trash-alt"></i> Delete Forever
                     </button>
                 </div>
             </div>
         </div>
-    </div>
- 
-    <!-- ── TOAST ── -->
-    <div id="toast"
-        class="fixed bottom-6 right-6 z-[999] hidden items-center gap-3 px-4 py-3 rounded-xl shadow-xl text-sm font-semibold text-white max-w-xs">
-        <i id="toast-icon" class="fas fa-check-circle text-base"></i>
-        <span id="toast-msg"></span>
     </div>
  
     <!-- ── DATA BRIDGE: PHP → JS ── -->
@@ -1051,6 +1323,8 @@ $clubDataJson          = json_encode($clubs,          $flags);
             eventTypes:     <?= $eventTypeDataJson ?>,
             orgs:           <?= $orgDataJson ?>,
             clubs:          <?= $clubDataJson ?>,
+            depts:          <?= $deptDataJson ?>,
+            announcements:  <?= $announcementDataJson ?>,
         };
     </script>
     <script src="/js/admin_event_manage.js"></script>

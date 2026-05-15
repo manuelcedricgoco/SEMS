@@ -2,7 +2,8 @@
  * SEMS Admin — admin_event_manage.js
  * Handles: Dark Mode, Sidebar, Filter Tabs, Live Search,
  *          Table Render, View Modal, Archive/Restore/Delete Modals,
- *          Manage Venues & Event Types Modal, PDF Export, Toast
+ *          Manage Venues & Event Types Modal (with pagination),
+ *          Announcements CRUD, PDF Export, Toast
  *
  * Requires SEMS_EVENT_DATA to be defined inline before this script loads.
  */
@@ -11,12 +12,14 @@
 // STATE
 // ═══════════════════════════════════════════════════════════════
 
-let eventData      = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.events         : [];
-let archivedData   = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.archivedEvents : [];
-let venueData      = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.venues         : [];
-let eventTypeData  = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.eventTypes     : [];
-let orgData        = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.orgs           : [];
-let clubData       = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.clubs          : [];
+let eventData         = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.events         : [];
+let archivedData      = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.archivedEvents : [];
+let venueData         = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.venues         : [];
+let eventTypeData     = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.eventTypes     : [];
+let orgData           = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.orgs           : [];
+let clubData          = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.clubs          : [];
+let announcementData  = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.announcements  : [];
+let deptData          = (typeof SEMS_EVENT_DATA !== 'undefined') ? SEMS_EVENT_DATA.depts          : [];
 
 let currentFilter      = 'all';
 let searchQuery        = '';
@@ -27,11 +30,24 @@ let _pendingRestoreId  = null;
 let _pendingPermDelId  = null;
 
 // Manage modal state
-let _manageTab           = 'venues';
-let _editingVenueId      = null;
-let _editingTypeId       = null;
-let _pendingMgmtDeleteId = null;
+let _manageTab             = 'venues';
+let _editingVenueId        = null;
+let _editingTypeId         = null;
+let _pendingMgmtDeleteId   = null;
 let _pendingMgmtDeleteKind = null; // 'venue' | 'type'
+
+// ── PAGINATION STATE ──
+const MGMT_PAGE_SIZE = 5;
+let _venuePage = 1;
+let _typePage  = 1;
+
+// Announcements state
+let _editingAnnId        = null;
+let _pendingAnnDeleteId  = null;
+let _annSearchQuery      = '';
+
+// Current view: 'active' | 'archived' | 'announcements'
+let _currentView = 'active';
 
 // ═══════════════════════════════════════════════════════════════
 // STATUS STYLE MAPS
@@ -55,6 +71,18 @@ const statusDot = {
     rejected: 'bg-rose-500',
 };
 
+const visibilityStyles = {
+    all:  'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20',
+    dept: 'bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20',
+    club: 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20',
+};
+
+const visibilityIcons = {
+    all:  'fa-globe',
+    dept: 'fa-building',
+    club: 'fa-users',
+};
+
 // ═══════════════════════════════════════════════════════════════
 // SPACING & ANIMATION CSS INJECTION
 // ═══════════════════════════════════════════════════════════════
@@ -73,7 +101,8 @@ const statusDot = {
             gap: 1.25rem;
         }
         #active-section.hidden,
-        #archived-section.hidden {
+        #archived-section.hidden,
+        #announcements-section.hidden {
             display: none !important;
         }
         .event-row {
@@ -106,6 +135,73 @@ const statusDot = {
         .archived-live-badge.has-items { background: #fbbf24; color: #78350f; }
         .dark .archived-live-badge.has-items { background: #d97706; color: #fffbeb; }
         #mgmt-venues-panel, #mgmt-types-panel { animation: fadeIn .2s ease both; }
+        .ann-row { transition: background-color 0.15s ease; }
+        #announcements-section { flex-direction: column; gap: 1.25rem; }
+
+        /* ── Pagination styles ── */
+        .sems-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            border-top: 1px solid;
+            border-color: #f1f5f9;
+            font-size: 12px;
+        }
+        .dark .sems-pagination { border-color: #334155; }
+        .sems-pagination .pg-info {
+            color: #94a3b8;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .sems-pagination .pg-btns {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .sems-pagination .pg-btn {
+            min-width: 30px;
+            height: 30px;
+            padding: 0 8px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            color: #64748b;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all .15s ease;
+            user-select: none;
+        }
+        .dark .sems-pagination .pg-btn {
+            border-color: #475569;
+            background: #1e293b;
+            color: #94a3b8;
+        }
+        .sems-pagination .pg-btn:hover:not(:disabled):not(.active) {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: #eff6ff;
+        }
+        .dark .sems-pagination .pg-btn:hover:not(:disabled):not(.active) {
+            background: #1d3050;
+            color: #60a5fa;
+            border-color: #3b82f6;
+        }
+        .sems-pagination .pg-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+            cursor: default;
+            box-shadow: 0 2px 6px rgba(59,130,246,.35);
+        }
+        .sems-pagination .pg-btn:disabled {
+            opacity: .38;
+            cursor: not-allowed;
+        }
     `;
     document.head.appendChild(style);
 })();
@@ -189,7 +285,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!searchInput) return;
     searchInput.addEventListener('keyup', function () {
         searchQuery = this.value.toLowerCase().trim();
-        render();
+        if (_currentView === 'active') render();
+        if (_currentView === 'announcements') renderAnnouncementsTable();
     });
 });
 
@@ -202,6 +299,13 @@ function formatDateTime(datetime) {
     return new Date(datetime).toLocaleString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
+    });
+}
+
+function formatDate(datetime) {
+    if (!datetime) return 'N/A';
+    return new Date(datetime).toLocaleDateString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
     });
 }
 
@@ -223,6 +327,18 @@ function syncArchivedBadge() {
     const count = archivedData.length;
     badge.textContent = count;
     badge.classList.toggle('has-items', count > 0);
+}
+
+function syncAnnouncementBadge() {
+    const btn = document.getElementById('view-announcements-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.ann-count-badge');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ann-count-badge ml-1 min-w-[1.25rem] h-5 px-1 rounded-full bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 text-[10px] font-bold inline-flex items-center justify-center';
+        btn.appendChild(badge);
+    }
+    badge.textContent = announcementData.length;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -249,6 +365,7 @@ function syncAllUI() {
     render();
     updateStatCards();
     syncArchivedBadge();
+    syncAnnouncementBadge();
     const archSection = document.getElementById('archived-section');
     if (archSection && !archSection.classList.contains('hidden')) {
         renderArchivedTable(archivedData);
@@ -357,42 +474,63 @@ function updateStatCards() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// VIEW TOGGLE (Active ↔ Archived)
+// VIEW TOGGLE HELPERS
+// ═══════════════════════════════════════════════════════════════
+
+function _hideAllSections() {
+    ['active-section', 'archived-section', 'announcements-section'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.display = 'none';
+        el.classList.add('hidden');
+    });
+}
+
+function _setViewBtnActive(activeId) {
+    ['view-active-btn', 'view-archived-btn', 'view-announcements-btn'].forEach(function (id) {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        if (id === activeId) {
+            btn.classList.add('bg-primary-500', 'text-white');
+            btn.classList.remove('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
+        } else {
+            btn.classList.remove('bg-primary-500', 'text-white');
+            btn.classList.add('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VIEW TOGGLE (Active / Archived / Announcements)
 // ═══════════════════════════════════════════════════════════════
 
 function showActiveView() {
-    const activeSection   = document.getElementById('active-section');
-    const archivedSection = document.getElementById('archived-section');
-    activeSection.style.display   = 'flex';
-    archivedSection.style.display = 'none';
-    activeSection.classList.remove('hidden');
-    archivedSection.classList.add('hidden');
-
-    const activeBtn   = document.getElementById('view-active-btn');
-    const archivedBtn = document.getElementById('view-archived-btn');
-    if (!activeBtn || !archivedBtn) return;
-    activeBtn.classList.add('bg-primary-500', 'text-white');
-    activeBtn.classList.remove('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
-    archivedBtn.classList.remove('bg-primary-500', 'text-white');
-    archivedBtn.classList.add('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
+    _currentView = 'active';
+    _hideAllSections();
+    const el = document.getElementById('active-section');
+    el.style.display = 'flex';
+    el.classList.remove('hidden');
+    _setViewBtnActive('view-active-btn');
 }
 
 function showArchivedView() {
-    const activeSection   = document.getElementById('active-section');
-    const archivedSection = document.getElementById('archived-section');
-    activeSection.style.display   = 'none';
-    archivedSection.style.display = 'flex';
-    activeSection.classList.add('hidden');
-    archivedSection.classList.remove('hidden');
-
-    const activeBtn   = document.getElementById('view-active-btn');
-    const archivedBtn = document.getElementById('view-archived-btn');
-    if (!activeBtn || !archivedBtn) return;
-    archivedBtn.classList.add('bg-primary-500', 'text-white');
-    archivedBtn.classList.remove('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
-    activeBtn.classList.remove('bg-primary-500', 'text-white');
-    activeBtn.classList.add('text-slate-600', 'dark:text-slate-400', 'hover:bg-gray-50', 'dark:hover:bg-slate-700');
+    _currentView = 'archived';
+    _hideAllSections();
+    const el = document.getElementById('archived-section');
+    el.style.display = 'flex';
+    el.classList.remove('hidden');
+    _setViewBtnActive('view-archived-btn');
     renderArchivedTable(archivedData);
+}
+
+function showAnnouncementsView() {
+    _currentView = 'announcements';
+    _hideAllSections();
+    const el = document.getElementById('announcements-section');
+    el.style.display = 'flex';
+    el.classList.remove('hidden');
+    _setViewBtnActive('view-announcements-btn');
+    renderAnnouncementsTable();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -670,17 +808,13 @@ async function permanentDeleteEvent() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════
 //  MANAGE VENUES & EVENT TYPES
-// ════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
-
-// ── Open / Close main manage modal ──────────────────────────────
 
 function openManageModal() {
     document.getElementById('manageModal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-    switchManageTab(_manageTab);   // restore last active tab
+    switchManageTab(_manageTab);
 }
 
 function closeManageModal() {
@@ -688,12 +822,8 @@ function closeManageModal() {
     document.body.style.overflow = '';
 }
 
-// ── Tab switching ────────────────────────────────────────────────
-
 function switchManageTab(tab) {
     _manageTab = tab;
-
-    // Tab button styles
     ['venues', 'types'].forEach(function (t) {
         const btn = document.getElementById('mgmt-tab-' + t);
         if (!btn) return;
@@ -703,20 +833,93 @@ function switchManageTab(tab) {
             btn.className = 'px-4 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-gray-200 dark:border-slate-600 hover:border-primary-400 hover:text-primary-500 transition-all duration-200';
         }
     });
-
-    // Panel visibility
     document.getElementById('mgmt-venues-panel').classList.toggle('hidden', tab !== 'venues');
     document.getElementById('mgmt-types-panel').classList.toggle('hidden', tab !== 'types');
-
-    // Render active panel
-    if (tab === 'venues') {
-        renderVenueList();
-    } else {
-        renderTypeList();
-    }
+    if (tab === 'venues') renderVenueList();
+    else renderTypeList();
 }
 
-// ── RENDER VENUE LIST ────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  PAGINATION HELPER
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Renders a pagination bar into `containerId`.
+ * @param {string}   containerId   - ID of the wrapper element (appended after table)
+ * @param {number}   currentPage   - 1-based current page
+ * @param {number}   totalItems    - total number of items
+ * @param {number}   pageSize      - items per page
+ * @param {Function} onPage        - callback(newPage) called when user clicks a page btn
+ */
+function _renderPagination(containerId, currentPage, totalItems, pageSize, onPage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    // Hide pagination bar entirely when everything fits on one page
+    if (totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const start = (currentPage - 1) * pageSize + 1;
+    const end   = Math.min(currentPage * pageSize, totalItems);
+
+    // Build page number buttons (show at most 5 around current)
+    let pageButtons = '';
+    const delta = 2;
+    for (let p = 1; p <= totalPages; p++) {
+        if (
+            p === 1 ||
+            p === totalPages ||
+            (p >= currentPage - delta && p <= currentPage + delta)
+        ) {
+            pageButtons += `
+                <button class="pg-btn${p === currentPage ? ' active' : ''}"
+                        onclick="${onPage.name}(${p})"
+                        ${p === currentPage ? 'disabled' : ''}>
+                    ${p}
+                </button>`;
+        } else if (
+            p === currentPage - delta - 1 ||
+            p === currentPage + delta + 1
+        ) {
+            pageButtons += `<span class="pg-btn" style="pointer-events:none;border:none;background:transparent;color:#94a3b8">…</span>`;
+        }
+    }
+
+    container.innerHTML = `
+        <div class="sems-pagination">
+            <span class="pg-info">${start}–${end} of ${totalItems}</span>
+            <div class="pg-btns">
+                <button class="pg-btn" onclick="${onPage.name}(${currentPage - 1})"
+                        ${currentPage === 1 ? 'disabled' : ''} title="Previous">
+                    <i class="fas fa-chevron-left" style="font-size:10px"></i>
+                </button>
+                ${pageButtons}
+                <button class="pg-btn" onclick="${onPage.name}(${currentPage + 1})"
+                        ${currentPage === totalPages ? 'disabled' : ''} title="Next">
+                    <i class="fas fa-chevron-right" style="font-size:10px"></i>
+                </button>
+            </div>
+        </div>`;
+}
+
+// ── Page-change callbacks (named so _renderPagination can reference them) ──
+function _goVenuePage(page) {
+    _venuePage = page;
+    renderVenueList();
+}
+
+function _goTypePage(page) {
+    _typePage = page;
+    renderTypeList();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER VENUE LIST  (with pagination)
+// ═══════════════════════════════════════════════════════════════
 
 function renderVenueList() {
     const tbody = document.getElementById('venue-list-body');
@@ -729,13 +932,22 @@ function renderVenueList() {
     if (venueData.length === 0) {
         tbody.innerHTML = '';
         if (empty) empty.classList.remove('hidden');
+        _renderPagination('venue-pagination', 1, 0, MGMT_PAGE_SIZE, _goVenuePage);
         return;
     }
     if (empty) empty.classList.add('hidden');
 
-    tbody.innerHTML = venueData.map(function (v) {
+    // Clamp page
+    const totalPages = Math.ceil(venueData.length / MGMT_PAGE_SIZE);
+    if (_venuePage > totalPages) _venuePage = totalPages;
+    if (_venuePage < 1)          _venuePage = 1;
+
+    const start  = (_venuePage - 1) * MGMT_PAGE_SIZE;
+    const paged  = venueData.slice(start, start + MGMT_PAGE_SIZE);
+
+    tbody.innerHTML = paged.map(function (v) {
         const capText = (v.capacity != null && v.capacity !== '')
-            ? Number(v.capacity).toLocaleString() + ' pax'
+            ? Number(v.capacity).toLocaleString() + ' max'
             : '<span class="italic text-slate-400">—</span>';
         return `
         <tr class="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
@@ -744,26 +956,24 @@ function renderVenueList() {
             <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                     <button onclick="openVenueForm(${v.venue_id})"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400
-                                   hover:bg-blue-100 dark:hover:bg-blue-500/20
-                                   border border-blue-200 dark:border-blue-500/30 transition-all">
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-200 dark:border-blue-500/30 transition-all">
                         <i class="fas fa-pencil-alt"></i> Edit
                     </button>
                     <button onclick="openMgmtDeleteModal(${v.venue_id}, 'venue')"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400
-                                   hover:bg-rose-100 dark:hover:bg-rose-500/20
-                                   border border-rose-200 dark:border-rose-500/30 transition-all">
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 transition-all">
                         <i class="fas fa-trash-alt"></i> Delete
                     </button>
                 </div>
             </td>
         </tr>`;
     }).join('');
+
+    _renderPagination('venue-pagination', _venuePage, venueData.length, MGMT_PAGE_SIZE, _goVenuePage);
 }
 
-// ── RENDER EVENT TYPE LIST ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  RENDER EVENT TYPE LIST  (with pagination)
+// ═══════════════════════════════════════════════════════════════
 
 function renderTypeList() {
     const tbody = document.getElementById('type-list-body');
@@ -776,22 +986,25 @@ function renderTypeList() {
     if (eventTypeData.length === 0) {
         tbody.innerHTML = '';
         if (empty) empty.classList.remove('hidden');
+        _renderPagination('type-pagination', 1, 0, MGMT_PAGE_SIZE, _goTypePage);
         return;
     }
     if (empty) empty.classList.add('hidden');
 
-    tbody.innerHTML = eventTypeData.map(function (t) {
+    // Clamp page
+    const totalPages = Math.ceil(eventTypeData.length / MGMT_PAGE_SIZE);
+    if (_typePage > totalPages) _typePage = totalPages;
+    if (_typePage < 1)          _typePage = 1;
+
+    const start = (_typePage - 1) * MGMT_PAGE_SIZE;
+    const paged = eventTypeData.slice(start, start + MGMT_PAGE_SIZE);
+
+    tbody.innerHTML = paged.map(function (t) {
         let scopeHtml;
         if (t.org_name) {
-            scopeHtml = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
-                           bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400
-                           border border-blue-100 dark:border-blue-500/20">
-                           <i class="fas fa-building text-[10px]"></i> ${_escHtml(t.org_name)}</span>`;
+            scopeHtml = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-500/20"><i class="fas fa-building text-[10px]"></i> ${_escHtml(t.org_name)}</span>`;
         } else if (t.club_name) {
-            scopeHtml = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs
-                           bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400
-                           border border-violet-100 dark:border-violet-500/20">
-                           <i class="fas fa-users text-[10px]"></i> ${_escHtml(t.club_name)}</span>`;
+            scopeHtml = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-500/20"><i class="fas fa-users text-[10px]"></i> ${_escHtml(t.club_name)}</span>`;
         } else {
             scopeHtml = '<span class="text-slate-400 italic text-xs">General</span>';
         }
@@ -802,33 +1015,30 @@ function renderTypeList() {
             <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                     <button onclick="openTypeForm(${t.type_id})"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400
-                                   hover:bg-blue-100 dark:hover:bg-blue-500/20
-                                   border border-blue-200 dark:border-blue-500/30 transition-all">
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-200 dark:border-blue-500/30 transition-all">
                         <i class="fas fa-pencil-alt"></i> Edit
                     </button>
                     <button onclick="openMgmtDeleteModal(${t.type_id}, 'type')"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                                   bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400
-                                   hover:bg-rose-100 dark:hover:bg-rose-500/20
-                                   border border-rose-200 dark:border-rose-500/30 transition-all">
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-500/20 border border-rose-200 dark:border-rose-500/30 transition-all">
                         <i class="fas fa-trash-alt"></i> Delete
                     </button>
                 </div>
             </td>
         </tr>`;
     }).join('');
+
+    _renderPagination('type-pagination', _typePage, eventTypeData.length, MGMT_PAGE_SIZE, _goTypePage);
 }
 
-// ── VENUE FORM (Add / Edit) ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  VENUE FORM
+// ═══════════════════════════════════════════════════════════════
 
 function openVenueForm(venueId) {
     _editingVenueId = (venueId != null) ? venueId : null;
     const titleEl   = document.getElementById('venueFormTitle');
     const nameInput = document.getElementById('venueNameInput');
     const capInput  = document.getElementById('venueCapInput');
-
     if (_editingVenueId !== null) {
         const venue = venueData.find(function (v) { return v.venue_id == _editingVenueId; });
         if (!venue) return;
@@ -840,7 +1050,6 @@ function openVenueForm(venueId) {
         nameInput.value     = '';
         capInput.value      = '';
     }
-
     document.getElementById('venueFormModal').classList.remove('hidden');
     setTimeout(function () { nameInput.focus(); }, 50);
 }
@@ -853,27 +1062,22 @@ function closeVenueForm() {
 async function submitVenueForm() {
     const name = document.getElementById('venueNameInput').value.trim();
     const cap  = document.getElementById('venueCapInput').value.trim();
-
     if (!name) { showToast('Venue name is required.', 'error'); return; }
-
     const btn = document.getElementById('venueFormSubmitBtn');
     btn.disabled  = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
-
     const fd = new FormData();
     if (_editingVenueId !== null) {
-        fd.append('edit_venue',  '1');
-        fd.append('venue_id',    _editingVenueId);
+        fd.append('edit_venue', '1');
+        fd.append('venue_id',   _editingVenueId);
     } else {
         fd.append('add_venue', '1');
     }
     fd.append('venue_name', name);
     fd.append('capacity',   cap);
-
     try {
         const res  = await fetch(window.location.href, { method: 'POST', body: fd });
         const data = await res.json();
-
         if (data.success) {
             if (_editingVenueId !== null) {
                 const idx = venueData.findIndex(function (v) { return v.venue_id == _editingVenueId; });
@@ -884,6 +1088,8 @@ async function submitVenueForm() {
                 showToast('Venue updated successfully!', 'success');
             } else {
                 venueData.push(data.venue);
+                // Jump to last page so user sees the newly added item
+                _venuePage = Math.ceil(venueData.length / MGMT_PAGE_SIZE);
                 showToast('Venue added successfully!', 'success');
             }
             closeVenueForm();
@@ -899,7 +1105,9 @@ async function submitVenueForm() {
     }
 }
 
-// ── EVENT TYPE FORM (Add / Edit) ─────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  EVENT TYPE FORM
+// ═══════════════════════════════════════════════════════════════
 
 function openTypeForm(typeId) {
     _editingTypeId  = (typeId != null) ? typeId : null;
@@ -907,19 +1115,10 @@ function openTypeForm(typeId) {
     const nameInput = document.getElementById('typeNameInput');
     const orgSel    = document.getElementById('typeOrgSelect');
     const clubSel   = document.getElementById('typeClubSelect');
-
-    // Populate org dropdown
     orgSel.innerHTML = '<option value="">— None —</option>' +
-        orgData.map(function (o) {
-            return '<option value="' + o.org_id + '">' + _escHtml(o.org_name) + '</option>';
-        }).join('');
-
-    // Populate club dropdown
+        orgData.map(function (o) { return '<option value="' + o.org_id + '">' + _escHtml(o.org_name) + '</option>'; }).join('');
     clubSel.innerHTML = '<option value="">— None —</option>' +
-        clubData.map(function (c) {
-            return '<option value="' + c.club_id + '">' + _escHtml(c.club_name) + '</option>';
-        }).join('');
-
+        clubData.map(function (c) { return '<option value="' + c.club_id + '">' + _escHtml(c.club_name) + '</option>'; }).join('');
     if (_editingTypeId !== null) {
         const type = eventTypeData.find(function (t) { return t.type_id == _editingTypeId; });
         if (!type) return;
@@ -929,11 +1128,8 @@ function openTypeForm(typeId) {
         clubSel.value       = type.club_id || '';
     } else {
         titleEl.textContent = 'Add Event Type';
-        nameInput.value     = '';
-        orgSel.value        = '';
-        clubSel.value       = '';
+        nameInput.value = ''; orgSel.value = ''; clubSel.value = '';
     }
-
     document.getElementById('typeFormModal').classList.remove('hidden');
     setTimeout(function () { nameInput.focus(); }, 50);
 }
@@ -947,13 +1143,10 @@ async function submitTypeForm() {
     const name   = document.getElementById('typeNameInput').value.trim();
     const orgId  = document.getElementById('typeOrgSelect').value;
     const clubId = document.getElementById('typeClubSelect').value;
-
     if (!name) { showToast('Type name is required.', 'error'); return; }
-
     const btn = document.getElementById('typeFormSubmitBtn');
     btn.disabled  = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
-
     const fd = new FormData();
     if (_editingTypeId !== null) {
         fd.append('edit_event_type', '1');
@@ -964,26 +1157,26 @@ async function submitTypeForm() {
     fd.append('type_name', name);
     fd.append('org_id',    orgId);
     fd.append('club_id',   clubId);
-
     try {
         const res  = await fetch(window.location.href, { method: 'POST', body: fd });
         const data = await res.json();
-
         if (data.success) {
             if (_editingTypeId !== null) {
                 const idx = eventTypeData.findIndex(function (t) { return t.type_id == _editingTypeId; });
                 if (idx !== -1) {
                     const org  = orgData.find(function (o)  { return o.org_id   == orgId;  });
                     const club = clubData.find(function (c) { return c.club_id  == clubId; });
-                    eventTypeData[idx].type_name  = name;
-                    eventTypeData[idx].org_id     = orgId  || null;
-                    eventTypeData[idx].club_id    = clubId || null;
-                    eventTypeData[idx].org_name   = org  ? org.org_name   : null;
-                    eventTypeData[idx].club_name  = club ? club.club_name : null;
+                    eventTypeData[idx].type_name = name;
+                    eventTypeData[idx].org_id    = orgId  || null;
+                    eventTypeData[idx].club_id   = clubId || null;
+                    eventTypeData[idx].org_name  = org  ? org.org_name   : null;
+                    eventTypeData[idx].club_name = club ? club.club_name : null;
                 }
                 showToast('Event type updated!', 'success');
             } else {
                 eventTypeData.push(data.type);
+                // Jump to last page so user sees the newly added item
+                _typePage = Math.ceil(eventTypeData.length / MGMT_PAGE_SIZE);
                 showToast('Event type added!', 'success');
             }
             closeTypeForm();
@@ -999,12 +1192,13 @@ async function submitTypeForm() {
     }
 }
 
-// ── MANAGE DELETE CONFIRM ────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  MGMT DELETE MODAL
+// ═══════════════════════════════════════════════════════════════
 
 function openMgmtDeleteModal(id, kind) {
     _pendingMgmtDeleteId   = id;
     _pendingMgmtDeleteKind = kind;
-
     let name = '';
     if (kind === 'venue') {
         const v = venueData.find(function (x) { return x.venue_id == id; });
@@ -1013,7 +1207,6 @@ function openMgmtDeleteModal(id, kind) {
         const t = eventTypeData.find(function (x) { return x.type_id == id; });
         name = t ? t.type_name : '';
     }
-
     document.getElementById('mgmtDeleteName').textContent = name;
     document.getElementById('mgmtDeleteModal').classList.remove('hidden');
 }
@@ -1026,13 +1219,11 @@ function closeMgmtDeleteModal() {
 
 async function confirmMgmtDelete() {
     if (!_pendingMgmtDeleteId || !_pendingMgmtDeleteKind) return;
-
     const idSnap   = _pendingMgmtDeleteId;
     const kindSnap = _pendingMgmtDeleteKind;
     const btn      = document.getElementById('mgmtDeleteConfirmBtn');
     btn.disabled   = true;
     btn.innerHTML  = '<i class="fas fa-spinner fa-spin"></i> Deleting…';
-
     const fd = new FormData();
     if (kindSnap === 'venue') {
         fd.append('delete_venue', '1');
@@ -1041,19 +1232,21 @@ async function confirmMgmtDelete() {
         fd.append('delete_event_type', '1');
         fd.append('type_id',           idSnap);
     }
-
     try {
         const res  = await fetch(window.location.href, { method: 'POST', body: fd });
         const data = await res.json();
-
         closeMgmtDeleteModal();
-
         if (data.success) {
             if (kindSnap === 'venue') {
                 venueData = venueData.filter(function (v) { return v.venue_id != idSnap; });
+                // Clamp page after deletion
+                const maxPage = Math.max(1, Math.ceil(venueData.length / MGMT_PAGE_SIZE));
+                if (_venuePage > maxPage) _venuePage = maxPage;
                 renderVenueList();
             } else {
                 eventTypeData = eventTypeData.filter(function (t) { return t.type_id != idSnap; });
+                const maxPage = Math.max(1, Math.ceil(eventTypeData.length / MGMT_PAGE_SIZE));
+                if (_typePage > maxPage) _typePage = maxPage;
                 renderTypeList();
             }
             showToast('Deleted successfully.', 'success');
@@ -1069,16 +1262,276 @@ async function confirmMgmtDelete() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PDF EXPORT (Print via hidden iframe)
+//  ANNOUNCEMENTS — RENDER
+// ═══════════════════════════════════════════════════════════════
+
+function renderAnnouncementsTable() {
+    const tbody   = document.getElementById('ann-table-body');
+    const empty   = document.getElementById('ann-empty-state');
+    const countEl = document.getElementById('ann-result-num');
+    if (!tbody) return;
+
+    const q = _annSearchQuery || searchQuery;
+    const filtered = q
+        ? announcementData.filter(function (a) {
+            return a.title.toLowerCase().includes(q) ||
+                   (a.poster_affiliation || a.organizer_name || '').toLowerCase().includes(q) ||
+                   (a.body || '').toLowerCase().includes(q);
+          })
+        : announcementData;
+
+    if (countEl) countEl.textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '';
+        if (empty) empty.classList.remove('hidden');
+        return;
+    }
+    if (empty) empty.classList.add('hidden');
+
+    tbody.innerHTML = filtered.map(function (a, idx) {
+        const vis      = a.visibility || 'all';
+        const visPill  = visibilityStyles[vis] || visibilityStyles.all;
+        const visIcon  = visibilityIcons[vis]  || visibilityIcons.all;
+        const visLabel = vis.charAt(0).toUpperCase() + vis.slice(1);
+        const pinned   = parseInt(a.is_pinned) === 1;
+        const postedBy = a.poster_affiliation || a.organizer_name || 'N/A';
+
+        return `
+        <tr class="ann-row hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors" data-ann-id="${a.announcement_id}" style="animation-delay:${idx * 0.03}s">
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-bullhorn text-indigo-500 dark:text-indigo-400 text-xs"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-slate-900 dark:text-white truncate">${_escHtml(a.title)}</span>
+                            ${pinned ? '<span class="flex-shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"><i class="fas fa-thumbtack text-[9px]"></i> Pinned</span>' : ''}
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5 truncate max-w-xs">${_escHtml((a.body || '').substring(0, 80))}${(a.body || '').length > 80 ? '…' : ''}</p>
+                    </div>
+                </div>
+            </td>
+            <td class="px-6 py-4 text-slate-600 dark:text-slate-400 text-sm">${_escHtml(postedBy)}</td>
+            <td class="px-6 py-4">
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-semibold ${visPill}">
+                    <i class="fas ${visIcon} text-[10px]"></i> ${visLabel}
+                </span>
+            </td>
+            <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs whitespace-nowrap">${formatDate(a.created_at)}</td>
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-2">
+                    <button onclick="openAnnModal(${a.announcement_id})" title="Edit Announcement"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                                   bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400
+                                   hover:bg-blue-100 dark:hover:bg-blue-500/20
+                                   border border-blue-200 dark:border-blue-500/30 transition-all duration-200">
+                        <i class="fas fa-pencil-alt"></i> Edit
+                    </button>
+                    <button onclick="openAnnDeleteModal(${a.announcement_id})" title="Delete Announcement"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
+                                   bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400
+                                   hover:bg-rose-100 dark:hover:bg-rose-500/20
+                                   border border-rose-200 dark:border-rose-500/30 transition-all duration-200">
+                        <i class="fas fa-trash-alt"></i> Delete
+                    </button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function filterAnnouncements() {
+    _annSearchQuery = (document.getElementById('annSearch').value || '').toLowerCase().trim();
+    renderAnnouncementsTable();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ANNOUNCEMENTS — ADD / EDIT MODAL
+// ═══════════════════════════════════════════════════════════════
+
+function openAnnModal(annId) {
+    _editingAnnId = (annId != null) ? annId : null;
+
+    const titleEl   = document.getElementById('annFormTitle');
+    const titleInp  = document.getElementById('annTitleInput');
+    const bodyInp   = document.getElementById('annBodyInput');
+    const visSel    = document.getElementById('annVisSelect');
+    const pinnedInp = document.getElementById('annPinnedInput');
+    const orgSel    = document.getElementById('annOrgSelect');
+    const clubSel   = document.getElementById('annClubSelect');
+    const deptSel   = document.getElementById('annDeptSelect');
+
+    orgSel.innerHTML  = '<option value="">— None —</option>' +
+        orgData.map(function (o) { return '<option value="' + o.org_id + '">' + _escHtml(o.org_name) + '</option>'; }).join('');
+    clubSel.innerHTML = '<option value="">— None —</option>' +
+        clubData.map(function (c) { return '<option value="' + c.club_id + '">' + _escHtml(c.club_name) + '</option>'; }).join('');
+    deptSel.innerHTML = '<option value="">— None —</option>' +
+        deptData.map(function (d) { return '<option value="' + d.dept_id + '">' + _escHtml(d.dept_name) + '</option>'; }).join('');
+
+    if (_editingAnnId !== null) {
+        const ann = announcementData.find(function (a) { return a.announcement_id == _editingAnnId; });
+        if (!ann) return;
+        titleEl.textContent  = 'Edit Announcement';
+        titleInp.value       = ann.title;
+        bodyInp.value        = ann.body || '';
+        visSel.value         = ann.visibility || 'all';
+        pinnedInp.checked    = parseInt(ann.is_pinned) === 1;
+        orgSel.value         = ann.org_id  || '';
+        clubSel.value        = ann.club_id || '';
+        deptSel.value        = ann.dept_id || '';
+    } else {
+        titleEl.textContent  = 'New Announcement';
+        titleInp.value       = '';
+        bodyInp.value        = '';
+        visSel.value         = 'all';
+        pinnedInp.checked    = false;
+        orgSel.value         = '';
+        clubSel.value        = '';
+        deptSel.value        = '';
+    }
+
+    document.getElementById('annModal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { titleInp.focus(); }, 50);
+}
+
+function closeAnnModal() {
+    _editingAnnId = null;
+    document.getElementById('annModal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+async function submitAnnForm() {
+    const title   = document.getElementById('annTitleInput').value.trim();
+    const body    = document.getElementById('annBodyInput').value.trim();
+    const vis     = document.getElementById('annVisSelect').value;
+    const pinned  = document.getElementById('annPinnedInput').checked ? '1' : '0';
+    const orgId   = document.getElementById('annOrgSelect').value;
+    const clubId  = document.getElementById('annClubSelect').value;
+    const deptId  = document.getElementById('annDeptSelect').value;
+
+    if (!title) { showToast('Title is required.', 'error'); return; }
+    if (!body)  { showToast('Body is required.', 'error');  return; }
+
+    const btn = document.getElementById('annFormSubmitBtn');
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+
+    const fd = new FormData();
+    if (_editingAnnId !== null) {
+        fd.append('edit_announcement',   '1');
+        fd.append('announcement_id',     _editingAnnId);
+    } else {
+        fd.append('add_announcement', '1');
+    }
+    fd.append('title',      title);
+    fd.append('body',       body);
+    fd.append('visibility', vis);
+    fd.append('is_pinned',  pinned);
+    fd.append('org_id',     orgId);
+    fd.append('club_id',    clubId);
+    fd.append('dept_id',    deptId);
+
+    try {
+        const res  = await fetch(window.location.href, { method: 'POST', body: fd });
+        const data = await res.json();
+
+        if (data.success) {
+            if (_editingAnnId !== null) {
+                const idx = announcementData.findIndex(function (a) { return a.announcement_id == _editingAnnId; });
+                if (idx !== -1) {
+                    const org  = orgData.find(function (o)  { return o.org_id   == orgId;  });
+                    const club = clubData.find(function (c) { return c.club_id  == clubId; });
+                    const dept = deptData.find(function (d) { return d.dept_id  == deptId; });
+                    announcementData[idx].title          = title;
+                    announcementData[idx].body           = body;
+                    announcementData[idx].visibility     = vis;
+                    announcementData[idx].is_pinned      = parseInt(pinned);
+                    announcementData[idx].org_id         = orgId  || null;
+                    announcementData[idx].club_id        = clubId || null;
+                    announcementData[idx].dept_id        = deptId || null;
+                    announcementData[idx].org_name       = org  ? org.org_name   : null;
+                    announcementData[idx].club_name      = club ? club.club_name : null;
+                    announcementData[idx].dept_name      = dept ? dept.dept_name : null;
+                }
+                showToast('Announcement updated!', 'success');
+            } else {
+                announcementData.unshift(data.announcement);
+                showToast('Announcement posted!', 'success');
+            }
+            closeAnnModal();
+            renderAnnouncementsTable();
+            syncAnnouncementBadge();
+        } else {
+            showToast(data.message || 'Failed to save announcement.', 'error');
+        }
+    } catch (_) {
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Announcement';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ANNOUNCEMENTS — DELETE MODAL
+// ═══════════════════════════════════════════════════════════════
+
+function openAnnDeleteModal(annId) {
+    const ann = announcementData.find(function (a) { return a.announcement_id == annId; });
+    if (!ann) return;
+    _pendingAnnDeleteId = annId;
+    document.getElementById('annDeleteTitle').textContent = ann.title;
+    document.getElementById('annDeleteModal').classList.remove('hidden');
+}
+
+function closeAnnDeleteModal() {
+    _pendingAnnDeleteId = null;
+    document.getElementById('annDeleteModal').classList.add('hidden');
+}
+
+async function confirmAnnDelete() {
+    if (!_pendingAnnDeleteId) return;
+    const idSnap = _pendingAnnDeleteId;
+    const btn    = document.getElementById('annDeleteConfirmBtn');
+    btn.disabled  = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting…';
+
+    const fd = new FormData();
+    fd.append('delete_announcement', '1');
+    fd.append('announcement_id',     idSnap);
+
+    try {
+        const res  = await fetch(window.location.href, { method: 'POST', body: fd });
+        const data = await res.json();
+        closeAnnDeleteModal();
+        if (data.success) {
+            announcementData = announcementData.filter(function (a) { return a.announcement_id != idSnap; });
+            renderAnnouncementsTable();
+            syncAnnouncementBadge();
+            showToast('Announcement deleted.', 'success');
+        } else {
+            showToast(data.message || 'Delete failed.', 'error');
+        }
+    } catch (_) {
+        showToast('Network error. Please try again.', 'error');
+    } finally {
+        btn.disabled  = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt"></i> Delete';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PDF EXPORT
 // ═══════════════════════════════════════════════════════════════
 
 function exportEventPDF(eventId) {
     const event = eventData.find(function (e) { return e.id == eventId; });
     if (!event) return;
-
     const desc = event.description && event.description.trim() !== ''
         ? event.description : 'No description provided.';
-
     const pdfContent = `
         <!DOCTYPE html><html><head>
         <title>Event Report - ${_escHtml(event.title)}</title>
@@ -1100,7 +1553,6 @@ function exportEventPDF(eventId) {
             .s-pending  { background:#fef3c7; color:#92400e; }
             .s-rejected { background:#fee2e2; color:#991b1b; }
             .footer { margin-top:38px; padding-top:18px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:11px; text-align:center; }
-            @media print { body { padding:40px; } }
         </style></head><body>
         <div class="header">
             <div class="logo">SEMS Admin</div>
@@ -1116,7 +1568,6 @@ function exportEventPDF(eventId) {
         </div>
         <div class="footer">Generated by SEMS Admin System &bull; ${new Date().toLocaleString()}</div>
         </body></html>`;
-
     const iframe = document.createElement('iframe');
     iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0;';
     document.body.appendChild(iframe);
@@ -1146,7 +1597,6 @@ function showToast(message, type) {
         error:   'fa-exclamation-circle',
         info:    'fa-info-circle',
     };
-
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 z-[999] ${colors[type] || colors.info} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5 text-sm font-medium translate-x-full transition-transform duration-300`;
     toast.innerHTML = `<i class="fas ${icons[type] || icons.info}"></i><span>${message}</span>`;
@@ -1185,6 +1635,8 @@ document.addEventListener('keydown', function (e) {
         closeVenueForm();
         closeTypeForm();
         closeManageModal();
+        closeAnnModal();
+        closeAnnDeleteModal();
     }
 });
 
@@ -1195,4 +1647,5 @@ document.addEventListener('keydown', function (e) {
 document.addEventListener('DOMContentLoaded', function () {
     render();
     syncArchivedBadge();
+    syncAnnouncementBadge();
 });
