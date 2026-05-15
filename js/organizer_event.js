@@ -2,8 +2,7 @@
  * SEMS Organizer — organizer_event.js
  * Handles: Dark Mode, Sidebar, Standard Time Formatter,
  *          Auto-Dismiss Alert, Tab Counts, Event Filter/Search
- *
- * No data bridge required — this file has no PHP dependencies.
+ *          Archive Tab (show/hide archive-tab-content)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -131,6 +130,7 @@ function initCounts() {
         if (counts[s] !== undefined) counts[s]++;
     });
 
+    // Update only the event-status tabs; archive count is set by PHP
     Object.keys(counts).forEach(function (t) {
         var el = document.getElementById('count-' + t);
         if (el) el.textContent = counts[t];
@@ -142,6 +142,9 @@ function initCounts() {
 // ═══════════════════════════════════════════════════════════════
 
 function filterEvents(query) {
+    // When archive tab is active, nothing to filter in the event grid
+    if (currentTab === 'archive') return;
+
     query = (query || '').toLowerCase().trim();
     var cards = document.querySelectorAll('.filterable-event');
     var shown = 0;
@@ -166,7 +169,7 @@ function filterEvents(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TAB SWITCHER
+// TAB SWITCHER  (All / Pending / Approved / Archive / Ended)
 // ═══════════════════════════════════════════════════════════════
 
 function setTab(tab) {
@@ -176,10 +179,11 @@ function setTab(tab) {
         all:      { txt:'text-blue-600 dark:text-blue-400',   bg:'bg-blue-100 dark:bg-blue-900/30',   border:'border-blue-300 dark:border-blue-700' },
         pending:  { txt:'text-amber-600 dark:text-amber-400', bg:'bg-amber-100 dark:bg-amber-900/30', border:'border-amber-300 dark:border-amber-700' },
         approved: { txt:'text-brand-600 dark:text-brand-400', bg:'bg-brand-100 dark:bg-brand-900/30', border:'border-brand-300 dark:border-brand-700' },
+        archive:  { txt:'text-slate-700 dark:text-slate-200', bg:'bg-slate-200 dark:bg-slate-600',    border:'border-slate-400 dark:border-slate-500' },
         ended:    { txt:'text-rose-600 dark:text-rose-400',   bg:'bg-rose-100 dark:bg-rose-900/30',   border:'border-rose-300 dark:border-rose-700' },
     };
 
-    ['all', 'pending', 'approved', 'ended'].forEach(function (t) {
+    ['all', 'pending', 'approved', 'archive', 'ended'].forEach(function (t) {
         var btn = document.getElementById('tab-' + t);
         if (!btn) return;
         btn.className = 'tab-btn flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all '
@@ -188,8 +192,30 @@ function setTab(tab) {
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700');
     });
 
-    var searchInput = document.getElementById('searchInput');
-    filterEvents(searchInput ? searchInput.value : '');
+    // ── Toggle archive content vs normal event grid ──
+    var archiveContent = document.getElementById('archive-tab-content');
+    var eventGrid      = document.getElementById('eventGrid');
+    var emptyAll       = document.getElementById('empty-all');
+
+    if (tab === 'archive') {
+        // Show archive panel
+        if (archiveContent) archiveContent.classList.remove('hidden');
+        // Hide event grid and all empty-state placeholders
+        if (eventGrid) eventGrid.style.display = 'none';
+        ['pending', 'approved', 'ended'].forEach(function (t) {
+            var el = document.getElementById('empty-' + t);
+            if (el) el.classList.add('hidden');
+        });
+        if (emptyAll) emptyAll.classList.add('hidden');
+    } else {
+        // Hide archive panel
+        if (archiveContent) archiveContent.classList.add('hidden');
+        // Restore event grid
+        if (eventGrid) eventGrid.style.display = '';
+        // Re-run filter so the correct cards show
+        var searchInput = document.getElementById('searchInput');
+        filterEvents(searchInput ? searchInput.value : '');
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -198,5 +224,25 @@ function setTab(tab) {
 
 document.addEventListener('DOMContentLoaded', function () {
     initCounts();
-    setTab('all');
+
+    // Auto-switch to archive tab when arriving from a restore / perm-delete redirect
+    var p = new URLSearchParams(window.location.search);
+    if (
+        p.get('restored_event') ||
+        p.get('restored_ann')   ||
+        p.get('perm_deleted_event') ||
+        p.get('perm_deleted_ann')
+    ) {
+        setTab('archive');
+    } else {
+        setTab('all');
+    }
+
+    // Live search wiring
+    var searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', function () {
+            filterEvents(this.value);
+        });
+    }
 });

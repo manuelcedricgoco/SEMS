@@ -275,7 +275,6 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'club_member_preview') {
 }
 
 // ── SECTION 14 — POST: CREATE EVENT ──────────────────────────
-// Auto-registration fires only when admin APPROVES — NOT here.
 $formError = ''; $formSuccess = '';
 
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['submit_event'])) {
@@ -325,7 +324,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['submit_event'])) {
                     $ins->execute([$title,$desc,$typeId,$venueId,$uid,$deptId,$orgId,$clubIdForInsert,$start,$end,$isRestricted]);
                     $eventId = $pdo->lastInsertId();
 
-                    // Save dept links only — NO auto-registration here
                     if (!empty($requiredDepts)) {
                         $deptIns = $pdo->prepare("INSERT INTO event_departments (event_id,dept_id) VALUES (?,?)");
                         foreach ($requiredDepts as $reqDeptId) { $deptIns->execute([$eventId,(int)$reqDeptId]); }
@@ -341,7 +339,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['submit_event'])) {
 if (!empty($_GET['success'])) $formSuccess = htmlspecialchars(urldecode($_GET['success']));
 
 // ── SECTION 15 — POST: SOFT-DELETE EVENT ─────────────────────
-// Also wipes registrations so re-archive doesn't leave stale records.
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['delete_event'])) {
     $deleteId = (int)($_POST['delete_event_id'] ?? 0);
     if ($deleteId>0) {
@@ -361,7 +358,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['delete_event'])) {
             }
             if ($canDelete) {
                 $pdo->beginTransaction();
-                // Wipe registrations so they can be re-created cleanly on restore
                 $pdo->prepare("DELETE FROM registrations WHERE event_id=?")->execute([$deleteId]);
                 $pdo->prepare("UPDATE events SET deleted_at=NOW(), deleted_by=? WHERE event_id=?")->execute([$uid,$deleteId]);
                 $pdo->commit();
@@ -375,12 +371,9 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['delete_event'])) {
 }
 
 // ── SECTION 15b — POST: RESTORE EVENT ────────────────────────
-// Blocks restore if archived by admin.
-// On successful restore, re-runs auto-registration.
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_event'])) {
     $restoreId = (int)($_POST['restore_event_id'] ?? 0);
     if ($restoreId>0) {
-        // Check who archived it
         $roleChk = $pdo->prepare("
             SELECT u.role FROM users u
             JOIN events e ON e.deleted_by=u.user_id
@@ -405,28 +398,21 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_event'])) {
         if ($ok) {
             try {
                 $pdo->beginTransaction();
-
-                // Restore the event
                 $pdo->prepare("UPDATE events SET deleted_at=NULL, deleted_by=NULL WHERE event_id=?")->execute([$restoreId]);
 
-                // Re-run auto-registration only if event is approved
                 if ($evRow['status']==='approved') {
-                    // Re-fetch club_id from events row
                     $evDetail = $pdo->prepare("SELECT club_id, is_restricted FROM events WHERE event_id=?");
                     $evDetail->execute([$restoreId]);
                     $ev = $evDetail->fetch(PDO::FETCH_ASSOC);
 
                     if (!empty($ev['club_id'])) {
-                        // Club-only event
                         $pdo->prepare("
                             INSERT IGNORE INTO registrations (event_id, user_id, registered_at)
                             SELECT ?, u.user_id, NOW()
                             FROM users u
                             WHERE u.club_id=? AND u.role='student'
                         ")->execute([$restoreId, (int)$ev['club_id']]);
-
                     } elseif (!empty($ev['is_restricted'])) {
-                        // Dept-restricted event
                         $deptStmt = $pdo->prepare("SELECT dept_id FROM event_departments WHERE event_id=?");
                         $deptStmt->execute([$restoreId]);
                         $deptIds = $deptStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -439,7 +425,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_event'])) {
                             ")->execute([$restoreId, (int)$dId]);
                         }
                     }
-                    // General events: voluntary — no auto-reg
                 }
 
                 $pdo->commit();
@@ -562,7 +547,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['delete_announcement']))
             }
             if ($canDelAnn) {
                 $pdo->prepare("UPDATE announcements SET deleted_at=NOW(), deleted_by=? WHERE announcement_id=?")->execute([$uid,$delAnnId]);
-                header("Location: ".$_SERVER['PHP_SELF']."?ann_deleted=1#announcements"); exit();
+                header("Location: ".$_SERVER['PHP_SELF']."?ann_deleted=1"); exit();
             } else { $annFormError='Not authorised to delete this announcement.'; }
         } catch (Exception $e) { $annFormError='Failed to archive announcement. '.$e->getMessage(); }
     }
@@ -570,7 +555,6 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['delete_announcement']))
 $annDeleted = !empty($_GET['ann_deleted']);
 
 // ── SECTION 19b — POST: RESTORE ANNOUNCEMENT ─────────────────
-// Blocks restore if archived by admin.
 if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_announcement'])) {
     $restoreAnnId = (int)($_POST['restore_ann_id'] ?? 0);
     if ($restoreAnnId>0) {
@@ -582,7 +566,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_announcement'])
         $roleChk->execute([$restoreAnnId]);
         $deleterRole = $roleChk->fetchColumn();
         if ($deleterRole==='admin') {
-            header("Location: ".$_SERVER['PHP_SELF']."?restore_blocked=1#archive"); exit();
+            header("Location: ".$_SERVER['PHP_SELF']."?restore_blocked=1"); exit();
         }
         $chk = $pdo->prepare("SELECT organizer_id,org_id,club_id FROM announcements WHERE announcement_id=? AND deleted_at IS NOT NULL");
         $chk->execute([$restoreAnnId]);
@@ -595,7 +579,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['restore_announcement'])
         if ($ok) {
             $pdo->prepare("UPDATE announcements SET deleted_at=NULL, deleted_by=NULL WHERE announcement_id=?")->execute([$restoreAnnId]);
         }
-        header("Location: ".$_SERVER['PHP_SELF']."?restored_ann=1#archive"); exit();
+        header("Location: ".$_SERVER['PHP_SELF']."?restored_ann=1"); exit();
     }
 }
 
@@ -614,7 +598,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['perm_delete_announcemen
         if ($ok) {
             $pdo->prepare("DELETE FROM announcements WHERE announcement_id=? AND deleted_at IS NOT NULL")->execute([$permAnnId]);
         }
-        header("Location: ".$_SERVER['PHP_SELF']."?perm_deleted_ann=1#archive"); exit();
+        header("Location: ".$_SERVER['PHP_SELF']."?perm_deleted_ann=1"); exit();
     }
 }
 
@@ -739,7 +723,6 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
         showAnnCreate:  <?= $annFormError ? 'true' : 'false' ?>,
         showAnnDelete:  false, deleteAnnId: null, deleteAnnTitle: '',
         showAnnView: false, selectedAnn: null,
-        showArchive:     false,
         archiveTab:      'events',
         showPermDelEvt:  false, permDelEvtId: null, permDelEvtTitle: '',
         showPermDelAnn:  false, permDelAnnId: null, permDelAnnTitle: ''
@@ -770,13 +753,12 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <p class="text-[10px] uppercase tracking-widest text-gray-400 px-3 pt-4 pb-1 font-semibold">Events</p>
             <a href="/organizer/organizer_event.php" class="nav-link active flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm"><i class="fas fa-clipboard-list"></i></span>
-                <span class="flex-1">Events  & Announcements</span>
+                <span class="flex-1">Events &amp; Announcements</span>
                 <?php if ($myEvents>0): ?><span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span><?php endif; ?>
             </a>
             <a href="/organizer/organizer_qrscan.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm"><i class="fas fa-qrcode"></i></span>QR Scanner
             </a>
-            
             <p class="text-[10px] uppercase tracking-widest text-gray-400 px-3 pt-4 pb-1 font-semibold">Tracking</p>
             <a href="/organizer/organizer_tracking.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 flex items-center justify-center text-sm"><i class="fas fa-users"></i></span>
@@ -811,7 +793,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 <div class="flex-1 mx-2 sm:mx-4 max-w-xs sm:max-w-sm">
                     <div class="relative">
                         <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-                        <input type="text" id="searchInput" onkeyup="filterEvents(this.value)" placeholder="Search events…"
+                        <input type="text" id="searchInput" placeholder="Search events…"
                             class="w-full pl-9 pr-4 py-2 text-sm rounded-lg bg-gray-100 dark:bg-gray-700 border border-transparent focus:border-brand-400 text-gray-700 dark:text-gray-200 placeholder-gray-400 outline-none transition-colors">
                     </div>
                 </div>
@@ -854,7 +836,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 </div>
             </div>
 
-            <!-- ALERTS -->
+            <!-- ── FLASH ALERTS (top-level, always visible) ── -->
             <?php if ($formSuccess): ?>
                 <div id="success-alert" class="anim-up d-0 bg-brand-50 dark:bg-brand-900/20 border border-brand-300 dark:border-brand-700 rounded-xl overflow-hidden">
                     <div class="flex items-center gap-3 px-4 py-3 text-brand-700 dark:text-brand-300 text-sm">
@@ -888,6 +870,24 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 </div>
             <?php endif; ?>
 
+            <?php if ($restoredEvent): ?>
+                <div class="anim-up d-0 flex items-center gap-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-300 dark:border-brand-700 text-brand-700 dark:text-brand-300 text-sm px-4 py-3 rounded-xl">
+                    <i class="fas fa-rotate-left text-brand-500 flex-shrink-0"></i><span class="flex-1">Event restored and students re-registered successfully.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($restoredAnn): ?>
+                <div class="anim-up d-0 flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm px-4 py-3 rounded-xl">
+                    <i class="fas fa-rotate-left text-orange-500 flex-shrink-0"></i><span class="flex-1">Announcement restored successfully and is now visible.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($permDelEvent || $permDelAnn): ?>
+                <div class="anim-up d-0 flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl">
+                    <i class="fas fa-trash text-red-500 flex-shrink-0"></i><span class="flex-1">Item permanently deleted and cannot be recovered.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                </div>
+            <?php endif; ?>
+
             <?php if ($pageError): ?>
                 <div class="anim-up d-0 flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl">
                     <i class="fas fa-circle-exclamation text-red-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($pageError) ?></span>
@@ -917,20 +917,34 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 <?php endforeach; ?>
             </div>
 
-            <!-- TAB BAR -->
-            <?php if (!empty($events)): ?>
-                <div class="anim-up d-2 flex flex-wrap gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm">
-                    <?php foreach ([['id'=>'all','label'=>'All','icon'=>'fa-layer-group'],['id'=>'pending','label'=>'Pending','icon'=>'fa-hourglass-half'],['id'=>'approved','label'=>'Approved','icon'=>'fa-calendar-check'],['id'=>'ended','label'=>'Ended','icon'=>'fa-flag-checkered']] as $tab): ?>
-                        <button id="tab-<?= $tab['id'] ?>" onclick="setTab('<?= $tab['id'] ?>')"
-                            class="tab-btn flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all">
-                            <i class="fas <?= $tab['icon'] ?> text-xs"></i><?= $tab['label'] ?>
-                            <span id="count-<?= $tab['id'] ?>" class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold min-w-[1.25rem] text-center">0</span>
-                        </button>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
+            <!-- ── TAB BAR: All | Pending | Approved | Archive | Ended ── -->
+            <div class="anim-up d-2 flex flex-wrap gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm">
+                <?php foreach ([
+                    ['id'=>'all',     'label'=>'All',     'icon'=>'fa-layer-group'],
+                    ['id'=>'pending', 'label'=>'Pending', 'icon'=>'fa-hourglass-half'],
+                    ['id'=>'approved','label'=>'Approved','icon'=>'fa-calendar-check'],
+                    ['id'=>'archive', 'label'=>'Archive', 'icon'=>'fa-box-archive'],
+                    ['id'=>'ended',   'label'=>'Ended',   'icon'=>'fa-flag-checkered'],
+                ] as $tab): ?>
+                    <button id="tab-<?= $tab['id'] ?>" onclick="setTab('<?= $tab['id'] ?>')"
+                        class="tab-btn flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all">
+                        <i class="fas <?= $tab['icon'] ?> text-xs"></i><?= $tab['label'] ?>
+                        <span id="count-<?= $tab['id'] ?>" class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold min-w-[1.25rem] text-center">
+                            <?= $tab['id'] === 'archive' ? $totalArchived : 0 ?>
+                        </span>
+                    </button>
+                <?php endforeach; ?>
+            </div>
 
-            <!-- EVENT GRID -->
+            <!-- Empty-state placeholders for filtered tabs -->
+            <?php foreach (['pending','approved','ended'] as $tId): ?>
+                <div id="empty-<?= $tId ?>" class="hidden anim-up d-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+                    <i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">No <?= $tId ?> events found.</p>
+                </div>
+            <?php endforeach; ?>
+
+            <!-- ── EVENT GRID (hidden when archive tab active) ── -->
             <?php if (empty($events)): ?>
                 <div class="anim-up d-2 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-16 text-center">
                     <i class="fas fa-calendar-plus text-5xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
@@ -941,13 +955,6 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                     <?php endif; ?>
                 </div>
             <?php else: ?>
-                <?php foreach (['pending','approved','ended'] as $tId): ?>
-                    <div id="empty-<?= $tId ?>" class="hidden anim-up d-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-                        <i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">No <?= $tId ?> events found.</p>
-                    </div>
-                <?php endforeach; ?>
-
                 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5" id="eventGrid">
                     <?php foreach ($events as $i => $ev):
                         $isEnded       = $ev['status']==='approved' && strtotime($ev['end_datetime'])<time();
@@ -1030,142 +1037,35 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <?php endif; ?>
 
 
-            <!-- ═══════ ANNOUNCEMENTS SECTION ══════════════════ -->
-            <?php if ($canPostAnnouncement): ?>
-            <section id="announcements" class="scroll-mt-20 space-y-4 anim-up d-3">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <!-- ── ARCHIVE TAB CONTENT (shown when Archive tab is active) ── -->
+            <div id="archive-tab-content" class="hidden space-y-5 anim-up d-2">
+
+                <!-- Header -->
+                <div class="flex items-center gap-3">
+                    <span class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center flex-shrink-0">
+                        <i class="fas fa-box-archive text-sm"></i>
+                    </span>
                     <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-500 flex items-center justify-center"><i class="fas fa-bullhorn text-sm"></i></span>Announcements
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            Archive
+                            <?php if ($totalArchived > 0): ?>
+                                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500"><?= $totalArchived ?></span>
+                            <?php endif; ?>
                         </h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                            <?= match($annVisibility){
-                                'all' =>'Visible to <strong class="text-orange-600 dark:text-orange-400">all students</strong>',
-                                'dept'=>'Visible to <strong class="text-purple-600 dark:text-purple-400">'.htmlspecialchars($annDeptName).'</strong> only',
-                                'club'=>'Visible to <strong class="text-purple-600 dark:text-purple-400">club members only</strong>',
-                                default=>''
-                            } ?>
-                        </p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Soft-deleted items — restore or permanently remove them.</p>
                     </div>
-                    <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow shadow-orange-400/30 transition-all active:scale-95 self-start sm:self-auto flex-shrink-0"><i class="fas fa-plus"></i> New Announcement</button>
                 </div>
 
-                <?php if ($annFormSuccess): ?>
-                    <div class="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-circle-check text-orange-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($annFormSuccess) ?></span>
-                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-                <?php if ($annDeleted): ?>
-                    <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/20 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-box-archive text-slate-500 flex-shrink-0"></i>
-                        <span class="flex-1">Announcement moved to archive. You can restore it from the Archive section below.</span>
-                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-                <?php if ($annFormError): ?>
-                    <div class="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-circle-exclamation text-red-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($annFormError) ?></span>
-                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (empty($announcements)): ?>
-                    <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-12 text-center">
-                        <i class="fas fa-bullhorn text-4xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
-                        <h4 class="font-semibold text-gray-700 dark:text-gray-300 mb-1">No announcements yet</h4>
-                        <p class="text-sm text-gray-400 mb-5">Keep your students informed by posting your first announcement.</p>
-                        <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl transition-colors active:scale-95"><i class="fas fa-plus"></i> Post Announcement</button>
+                <?php if ($totalArchived === 0): ?>
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-16 text-center">
+                        <i class="fas fa-box-open text-5xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
+                        <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2">Archive is empty</h3>
+                        <p class="text-sm text-gray-400">Archived events and announcements will appear here.</p>
                     </div>
                 <?php else: ?>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                        <?php foreach ($announcements as $j => $ann):
-                            $isPinned   = (bool)$ann['is_pinned'];
-                            $isAnnOwner = (int)$ann['organizer_id']===$uid;
-                            $posterName = trim(($ann['poster_first']??'').' '.($ann['poster_last']??'')) ?: 'Unknown';
-                            $annDate    = date('M j, Y · g:i A',strtotime($ann['created_at']));
-                            $bodyPrev   = mb_strimwidth(strip_tags($ann['body']),0,120,'…');
-                            $visBadge   = match($ann['visibility']){
-                                'all' =>['text'=>'All Students','cls'=>'bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-700','icon'=>'fa-globe'],
-                                'dept'=>['text'=>htmlspecialchars($ann['dept_name']??'Dept'),'cls'=>'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-700','icon'=>'fa-building'],
-                                'club'=>['text'=>htmlspecialchars($ann['club_name']??'Club'),'cls'=>'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-700','icon'=>'fa-users'],
-                                default=>['text'=>'Unknown','cls'=>'bg-gray-100 text-gray-500','icon'=>'fa-question'],
-                            };
-                        ?>
-                            <div class="card-hover bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden group <?= $isPinned?'ring-2 ring-orange-300 dark:ring-orange-700':'' ?>" style="animation-delay:<?= $j*60 ?>ms">
-                                <div class="h-1 bg-gradient-to-r from-orange-400 to-amber-400"></div>
-                                <div class="p-4 flex flex-col h-full">
-                                    <div class="flex items-start justify-between gap-2 mb-2">
-                                        <div class="flex-1 min-w-0">
-                                            <?php if ($isPinned): ?><span class="inline-flex items-center gap-1 text-[10px] font-bold text-orange-500 mb-1"><i class="fas fa-thumbtack text-[9px]"></i> Pinned</span><?php endif; ?>
-                                            <h5 class="font-bold text-gray-900 dark:text-white text-sm leading-snug line-clamp-2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors"><?= htmlspecialchars($ann['title']) ?></h5>
-                                        </div>
-                                        <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 <?= $visBadge['cls'] ?>"><i class="fas <?= $visBadge['icon'] ?>" style="font-size:.6rem"></i><?= $visBadge['text'] ?></span>
-                                    </div>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 mb-3 flex-1 leading-relaxed"><?= htmlspecialchars($bodyPrev) ?></p>
-                                    <div class="flex items-center gap-2 text-[10px] text-gray-400 mb-3">
-                                        <i class="fas fa-user text-[9px]"></i><span><?= htmlspecialchars($posterName) ?></span><span class="mx-1">·</span><i class="fas fa-clock text-[9px]"></i><span><?= $annDate ?></span>
-                                    </div>
-                                    <div class="flex gap-2 mt-auto">
-                                        <button @click="selectedAnn=<?= htmlspecialchars(json_encode($ann)) ?>; showAnnView=true"
-                                            class="flex-1 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1.5 active:scale-95">
-                                            <i class="far fa-eye text-blue-400"></i> Read
-                                        </button>
-                                        <?php if ($isAnnOwner||($myOrgId&&$ann['org_id']==$myOrgId)||($myClubId&&$ann['club_id']==$myClubId)): ?>
-                                            <button @click="deleteAnnId=<?= $ann['announcement_id'] ?>; deleteAnnTitle=<?= htmlspecialchars(json_encode($ann['title'])) ?>; showAnnDelete=true"
-                                                class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-slate-900/20 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-500 hover:text-white transition-all active:scale-95 flex items-center gap-1" title="Archive">
-                                                <i class="fas fa-box-archive"></i>
-                                            </button>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-            </section>
-            <?php endif; ?>
 
-
-            <!-- ═══════ ARCHIVE SECTION ════════════════════════ -->
-            <?php if ($totalArchived>0||$restoredEvent||$restoredAnn||$permDelEvent||$permDelAnn||$restoreBlocked): ?>
-            <section id="archive" class="scroll-mt-20 space-y-4 anim-up d-4">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                        <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center"><i class="fas fa-box-archive text-sm"></i></span>
-                            Archive
-                            <?php if ($totalArchived>0): ?><span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500"><?= $totalArchived ?></span><?php endif; ?>
-                        </h3>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Soft-deleted items — restore or permanently remove them.</p>
-                    </div>
-                    <button @click="showArchive=!showArchive"
-                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all self-start sm:self-auto flex-shrink-0">
-                        <i class="fas fa-chevron-down transition-transform duration-200" :class="showArchive?'rotate-180':''"></i>
-                        <span x-text="showArchive?'Collapse':'View Archive'"></span>
-                    </button>
-                </div>
-
-                <?php if ($restoredEvent): ?>
-                    <div class="flex items-center gap-3 bg-brand-50 dark:bg-brand-900/20 border border-brand-300 dark:border-brand-700 text-brand-700 dark:text-brand-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-rotate-left text-brand-500 flex-shrink-0"></i><span class="flex-1">Event restored and students re-registered successfully.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-                <?php if ($restoredAnn): ?>
-                    <div class="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-rotate-left text-orange-500 flex-shrink-0"></i><span class="flex-1">Announcement restored successfully and is now visible.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-                <?php if ($permDelEvent||$permDelAnn): ?>
-                    <div class="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl">
-                        <i class="fas fa-trash text-red-500 flex-shrink-0"></i><span class="flex-1">Item permanently deleted and cannot be recovered.</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
-                    </div>
-                <?php endif; ?>
-
-                <div x-show="showArchive" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
-
-                    <!-- Archive tab bar -->
-                    <div class="flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm mb-4">
+                    <!-- Archive sub-tab bar -->
+                    <div class="flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm">
                         <button @click="archiveTab='events'"
                             :class="archiveTab==='events'?'bg-slate-700 dark:bg-slate-600 text-white shadow':'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'"
                             class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
@@ -1206,7 +1106,6 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                                             <p class="text-xs text-gray-400 flex items-center gap-1.5 mb-1"><i class="fas fa-location-dot text-red-300 text-[10px]"></i><?= htmlspecialchars($archEv['venue_name']??'—') ?></p>
                                             <p class="text-xs text-gray-400 flex items-center gap-1.5 mb-3"><i class="fas fa-calendar-day text-slate-400 text-[10px]"></i><?= date('M j, Y',strtotime($archEv['start_datetime'])) ?> &mdash; <?= date('M j, Y',strtotime($archEv['end_datetime'])) ?></p>
 
-                                            <!-- Archived by badge — red if admin, slate if organizer -->
                                             <?php if ($archivedByAdmin): ?>
                                                 <div class="flex items-center gap-1.5 text-[10px] text-red-500 bg-red-50 dark:bg-red-900/20 rounded-lg px-3 py-2 mb-4 border border-red-200 dark:border-red-800">
                                                     <i class="fas fa-shield-halved text-[9px]"></i>
@@ -1225,7 +1124,6 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                                                 <span><i class="fas fa-users text-[10px] mr-1"></i><?= $archEv['reg_count'] ?> registered</span>
                                             </div>
 
-                                            <!-- Actions: no Restore if archived by admin -->
                                             <div class="flex gap-2">
                                                 <?php if ($archivedByAdmin): ?>
                                                     <div class="flex-1 py-2 text-xs font-semibold rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-700 flex items-center justify-center gap-1.5 cursor-not-allowed">
@@ -1326,7 +1224,103 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                     </div>
                     <?php endif; ?>
 
-                </div><!-- /showArchive -->
+                <?php endif; ?>
+            </div><!-- /archive-tab-content -->
+
+
+            <!-- ═══════ ANNOUNCEMENTS SECTION ══════════════════ -->
+            <?php if ($canPostAnnouncement): ?>
+            <section id="announcements" class="scroll-mt-20 space-y-4 anim-up d-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <span class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-500 flex items-center justify-center"><i class="fas fa-bullhorn text-sm"></i></span>Announcements
+                        </h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                            <?= match($annVisibility){
+                                'all' =>'Visible to <strong class="text-orange-600 dark:text-orange-400">all students</strong>',
+                                'dept'=>'Visible to <strong class="text-purple-600 dark:text-purple-400">'.htmlspecialchars($annDeptName).'</strong> only',
+                                'club'=>'Visible to <strong class="text-purple-600 dark:text-purple-400">club members only</strong>',
+                                default=>''
+                            } ?>
+                        </p>
+                    </div>
+                    <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow shadow-orange-400/30 transition-all active:scale-95 self-start sm:self-auto flex-shrink-0"><i class="fas fa-plus"></i> New Announcement</button>
+                </div>
+
+                <?php if ($annFormSuccess): ?>
+                    <div class="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm px-4 py-3 rounded-xl">
+                        <i class="fas fa-circle-check text-orange-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($annFormSuccess) ?></span>
+                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                    </div>
+                <?php endif; ?>
+                <?php if ($annDeleted): ?>
+                    <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/20 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-sm px-4 py-3 rounded-xl">
+                        <i class="fas fa-box-archive text-slate-500 flex-shrink-0"></i>
+                        <span class="flex-1">Announcement archived. You can restore it from the <button onclick="setTab('archive')" class="underline font-semibold">Archive tab</button>.</span>
+                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                    </div>
+                <?php endif; ?>
+                <?php if ($annFormError): ?>
+                    <div class="flex items-center gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 text-sm px-4 py-3 rounded-xl">
+                        <i class="fas fa-circle-exclamation text-red-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($annFormError) ?></span>
+                        <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (empty($announcements)): ?>
+                    <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-12 text-center">
+                        <i class="fas fa-bullhorn text-4xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
+                        <h4 class="font-semibold text-gray-700 dark:text-gray-300 mb-1">No announcements yet</h4>
+                        <p class="text-sm text-gray-400 mb-5">Keep your students informed by posting your first announcement.</p>
+                        <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl transition-colors active:scale-95"><i class="fas fa-plus"></i> Post Announcement</button>
+                    </div>
+                <?php else: ?>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <?php foreach ($announcements as $j => $ann):
+                            $isPinned   = (bool)$ann['is_pinned'];
+                            $isAnnOwner = (int)$ann['organizer_id']===$uid;
+                            $posterName = trim(($ann['poster_first']??'').' '.($ann['poster_last']??'')) ?: 'Unknown';
+                            $annDate    = date('M j, Y · g:i A',strtotime($ann['created_at']));
+                            $bodyPrev   = mb_strimwidth(strip_tags($ann['body']),0,120,'…');
+                            $visBadge   = match($ann['visibility']){
+                                'all' =>['text'=>'All Students','cls'=>'bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-700','icon'=>'fa-globe'],
+                                'dept'=>['text'=>htmlspecialchars($ann['dept_name']??'Dept'),'cls'=>'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-700','icon'=>'fa-building'],
+                                'club'=>['text'=>htmlspecialchars($ann['club_name']??'Club'),'cls'=>'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-700','icon'=>'fa-users'],
+                                default=>['text'=>'Unknown','cls'=>'bg-gray-100 text-gray-500','icon'=>'fa-question'],
+                            };
+                        ?>
+                            <div class="card-hover bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden group <?= $isPinned?'ring-2 ring-orange-300 dark:ring-orange-700':'' ?>" style="animation-delay:<?= $j*60 ?>ms">
+                                <div class="h-1 bg-gradient-to-r from-orange-400 to-amber-400"></div>
+                                <div class="p-4 flex flex-col h-full">
+                                    <div class="flex items-start justify-between gap-2 mb-2">
+                                        <div class="flex-1 min-w-0">
+                                            <?php if ($isPinned): ?><span class="inline-flex items-center gap-1 text-[10px] font-bold text-orange-500 mb-1"><i class="fas fa-thumbtack text-[9px]"></i> Pinned</span><?php endif; ?>
+                                            <h5 class="font-bold text-gray-900 dark:text-white text-sm leading-snug line-clamp-2 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors"><?= htmlspecialchars($ann['title']) ?></h5>
+                                        </div>
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 <?= $visBadge['cls'] ?>"><i class="fas <?= $visBadge['icon'] ?>" style="font-size:.6rem"></i><?= $visBadge['text'] ?></span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-3 mb-3 flex-1 leading-relaxed"><?= htmlspecialchars($bodyPrev) ?></p>
+                                    <div class="flex items-center gap-2 text-[10px] text-gray-400 mb-3">
+                                        <i class="fas fa-user text-[9px]"></i><span><?= htmlspecialchars($posterName) ?></span><span class="mx-1">·</span><i class="fas fa-clock text-[9px]"></i><span><?= $annDate ?></span>
+                                    </div>
+                                    <div class="flex gap-2 mt-auto">
+                                        <button @click="selectedAnn=<?= htmlspecialchars(json_encode($ann)) ?>; showAnnView=true"
+                                            class="flex-1 py-1.5 text-xs font-semibold rounded-xl bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1.5 active:scale-95">
+                                            <i class="far fa-eye text-blue-400"></i> Read
+                                        </button>
+                                        <?php if ($isAnnOwner||($myOrgId&&$ann['org_id']==$myOrgId)||($myClubId&&$ann['club_id']==$myClubId)): ?>
+                                            <button @click="deleteAnnId=<?= $ann['announcement_id'] ?>; deleteAnnTitle=<?= htmlspecialchars(json_encode($ann['title'])) ?>; showAnnDelete=true"
+                                                class="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-50 dark:bg-slate-900/20 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-500 hover:text-white transition-all active:scale-95 flex items-center gap-1" title="Archive">
+                                                <i class="fas fa-box-archive"></i>
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </section>
             <?php endif; ?>
 
@@ -1538,7 +1532,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <div class="p-6 space-y-4">
                 <p class="text-sm text-gray-600 dark:text-gray-300">Archive <strong class="text-gray-900 dark:text-white" x-text="'«'+deleteAnnTitle+'»'"></strong>?</p>
                 <div class="flex items-start gap-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-xs text-blue-600 dark:text-blue-400">
-                    <i class="fas fa-circle-info mt-0.5 flex-shrink-0"></i>Hidden from students but <strong>not permanently deleted</strong>. Restorable from Archive.
+                    <i class="fas fa-circle-info mt-0.5 flex-shrink-0"></i>Hidden from students but <strong>not permanently deleted</strong>. Restorable from the Archive tab.
                 </div>
                 <div class="flex gap-3">
                     <button @click="showAnnDelete=false" class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Cancel</button>
