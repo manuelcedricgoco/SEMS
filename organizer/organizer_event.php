@@ -836,7 +836,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 </div>
             </div>
 
-            <!-- ── FLASH ALERTS (top-level, always visible) ── -->
+            <!-- ── FLASH ALERTS ── -->
             <?php if ($formSuccess): ?>
                 <div id="success-alert" class="anim-up d-0 bg-brand-50 dark:bg-brand-900/20 border border-brand-300 dark:border-brand-700 rounded-xl overflow-hidden">
                     <div class="flex items-center gap-3 px-4 py-3 text-brand-700 dark:text-brand-300 text-sm">
@@ -917,26 +917,33 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 <?php endforeach; ?>
             </div>
 
-            <!-- ── TAB BAR: All | Pending | Approved | Archive | Ended ── -->
-            <div class="anim-up d-2 flex flex-wrap gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm">
-                <?php foreach ([
-                    ['id'=>'all',     'label'=>'All',     'icon'=>'fa-layer-group'],
-                    ['id'=>'pending', 'label'=>'Pending', 'icon'=>'fa-hourglass-half'],
-                    ['id'=>'approved','label'=>'Approved','icon'=>'fa-calendar-check'],
-                    ['id'=>'archive', 'label'=>'Archive', 'icon'=>'fa-box-archive'],
-                    ['id'=>'ended',   'label'=>'Ended',   'icon'=>'fa-flag-checkered'],
-                ] as $tab): ?>
+            <!-- ════════════════════════════════════════════════
+                 TAB BAR — All | Pending | Approved | Archive | Ended | Announcements
+                 ════════════════════════════════════════════════ -->
+            <div class="anim-up d-2 flex flex-wrap gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 shadow-sm w-fit">
+                <?php
+                $tabItems = [
+                    ['id'=>'all',           'label'=>'All',           'icon'=>'fa-layer-group',    'count'=>0                ],
+                    ['id'=>'pending',       'label'=>'Pending',        'icon'=>'fa-hourglass-half', 'count'=>0                ],
+                    ['id'=>'approved',      'label'=>'Approved',       'icon'=>'fa-calendar-check', 'count'=>0                ],
+                    ['id'=>'archive',       'label'=>'Archive',        'icon'=>'fa-box-archive',    'count'=>$totalArchived   ],
+                    ['id'=>'ended',         'label'=>'Ended',          'icon'=>'fa-flag-checkered', 'count'=>0                ],
+                    ['id'=>'announcements', 'label'=>'Announcements',  'icon'=>'fa-bullhorn',       'count'=>$annBadgeCount   ],
+                ];
+                foreach ($tabItems as $tab): ?>
                     <button id="tab-<?= $tab['id'] ?>" onclick="setTab('<?= $tab['id'] ?>')"
                         class="tab-btn flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all">
                         <i class="fas <?= $tab['icon'] ?> text-xs"></i><?= $tab['label'] ?>
-                        <span id="count-<?= $tab['id'] ?>" class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold min-w-[1.25rem] text-center">
-                            <?= $tab['id'] === 'archive' ? $totalArchived : 0 ?>
+                        <span id="count-<?= $tab['id'] ?>"
+                              class="text-xs px-1.5 py-0.5 rounded-full font-bold min-w-[1.25rem] text-center
+                                     <?= $tab['id']==='announcements' ? 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500' ?>">
+                            <?= $tab['count'] ?>
                         </span>
                     </button>
                 <?php endforeach; ?>
             </div>
 
-            <!-- Empty-state placeholders for filtered tabs -->
+            <!-- Empty-state placeholders for filtered event tabs -->
             <?php foreach (['pending','approved','ended'] as $tId): ?>
                 <div id="empty-<?= $tId ?>" class="hidden anim-up d-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
                     <i class="fas fa-inbox text-3xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
@@ -944,7 +951,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                 </div>
             <?php endforeach; ?>
 
-            <!-- ── EVENT GRID (hidden when archive tab active) ── -->
+            <!-- ── EVENT GRID ── -->
             <?php if (empty($events)): ?>
                 <div class="anim-up d-2 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-16 text-center">
                     <i class="fas fa-calendar-plus text-5xl text-gray-300 dark:text-gray-600 mb-4 block"></i>
@@ -1037,10 +1044,9 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <?php endif; ?>
 
 
-            <!-- ── ARCHIVE TAB CONTENT (shown when Archive tab is active) ── -->
+            <!-- ═══════ ARCHIVE TAB CONTENT ════════════════════ -->
             <div id="archive-tab-content" class="hidden space-y-5 anim-up d-2">
 
-                <!-- Header -->
                 <div class="flex items-center gap-3">
                     <span class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center flex-shrink-0">
                         <i class="fas fa-box-archive text-sm"></i>
@@ -1064,7 +1070,6 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                     </div>
                 <?php else: ?>
 
-                    <!-- Archive sub-tab bar -->
                     <div class="flex gap-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl p-1.5 w-fit shadow-sm">
                         <button @click="archiveTab='events'"
                             :class="archiveTab==='events'?'bg-slate-700 dark:bg-slate-600 text-white shadow':'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'"
@@ -1152,7 +1157,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                         <?php endif; ?>
                     </div>
 
-                    <!-- Archived Announcements -->
+                    <!-- Archived Announcements (inside Archive sub-tab) -->
                     <?php if ($canPostAnnouncement): ?>
                     <div x-show="archiveTab==='announcements'">
                         <?php if (empty($archivedAnnouncements)): ?>
@@ -1228,13 +1233,25 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             </div><!-- /archive-tab-content -->
 
 
-            <!-- ═══════ ANNOUNCEMENTS SECTION ══════════════════ -->
+            <!-- ═══════════════════════════════════════════════════
+                 ANNOUNCEMENTS TAB CONTENT
+                 Hidden by default — shown when "Announcements" tab
+                 is clicked. Wraps the existing announcements section.
+                 id="announcements-tab-content" is the JS hook.
+                 ═══════════════════════════════════════════════════ -->
             <?php if ($canPostAnnouncement): ?>
+            <div id="announcements-tab-content" class="hidden">
             <section id="announcements" class="scroll-mt-20 space-y-4 anim-up d-3">
+
+                <!-- Section header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h3 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <span class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-500 flex items-center justify-center"><i class="fas fa-bullhorn text-sm"></i></span>Announcements
+                            <span class="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-500 flex items-center justify-center"><i class="fas fa-bullhorn text-sm"></i></span>
+                            Announcements
+                            <?php if ($annBadgeCount > 0): ?>
+                                <span class="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400"><?= $annBadgeCount ?></span>
+                            <?php endif; ?>
                         </h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                             <?= match($annVisibility){
@@ -1245,9 +1262,12 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                             } ?>
                         </p>
                     </div>
-                    <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow shadow-orange-400/30 transition-all active:scale-95 self-start sm:self-auto flex-shrink-0"><i class="fas fa-plus"></i> New Announcement</button>
+                    <button @click="showAnnCreate=true" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold shadow shadow-orange-400/30 transition-all active:scale-95 self-start sm:self-auto flex-shrink-0">
+                        <i class="fas fa-plus"></i> New Announcement
+                    </button>
                 </div>
 
+                <!-- Announcement flash alerts -->
                 <?php if ($annFormSuccess): ?>
                     <div class="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 text-sm px-4 py-3 rounded-xl">
                         <i class="fas fa-circle-check text-orange-500 flex-shrink-0"></i><span class="flex-1"><?= htmlspecialchars($annFormSuccess) ?></span>
@@ -1268,6 +1288,7 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                     </div>
                 <?php endif; ?>
 
+                <!-- Announcement cards / empty state -->
                 <?php if (empty($announcements)): ?>
                     <div class="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 p-12 text-center">
                         <i class="fas fa-bullhorn text-4xl text-gray-300 dark:text-gray-600 mb-3 block"></i>
@@ -1321,7 +1342,9 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+
             </section>
+            </div><!-- /announcements-tab-content -->
             <?php endif; ?>
 
         </main>

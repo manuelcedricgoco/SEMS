@@ -1,8 +1,8 @@
 /**
  * SEMS Organizer — organizer_event.js
  * Handles: Dark Mode, Sidebar, Standard Time Formatter,
- *          Auto-Dismiss Alert, Tab Counts, Event Filter/Search
- *          Archive Tab (show/hide archive-tab-content)
+ *          Auto-Dismiss Alert, Tab Counts, Event Filter/Search,
+ *          Archive Tab, Announcements Tab (show/hide)
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -130,7 +130,7 @@ function initCounts() {
         if (counts[s] !== undefined) counts[s]++;
     });
 
-    // Update only the event-status tabs; archive count is set by PHP
+    // Update event-status tab counts; archive & announcements counts are set by PHP
     Object.keys(counts).forEach(function (t) {
         var el = document.getElementById('count-' + t);
         if (el) el.textContent = counts[t];
@@ -142,8 +142,8 @@ function initCounts() {
 // ═══════════════════════════════════════════════════════════════
 
 function filterEvents(query) {
-    // When archive tab is active, nothing to filter in the event grid
-    if (currentTab === 'archive') return;
+    // When archive or announcements tab is active, nothing to filter in the event grid
+    if (currentTab === 'archive' || currentTab === 'announcements') return;
 
     query = (query || '').toLowerCase().trim();
     var cards = document.querySelectorAll('.filterable-event');
@@ -169,21 +169,22 @@ function filterEvents(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TAB SWITCHER  (All / Pending / Approved / Archive / Ended)
+// TAB SWITCHER  (All / Pending / Approved / Archive / Ended / Announcements)
 // ═══════════════════════════════════════════════════════════════
 
 function setTab(tab) {
     currentTab = tab;
 
     var palette = {
-        all:      { txt:'text-blue-600 dark:text-blue-400',   bg:'bg-blue-100 dark:bg-blue-900/30',   border:'border-blue-300 dark:border-blue-700' },
-        pending:  { txt:'text-amber-600 dark:text-amber-400', bg:'bg-amber-100 dark:bg-amber-900/30', border:'border-amber-300 dark:border-amber-700' },
-        approved: { txt:'text-brand-600 dark:text-brand-400', bg:'bg-brand-100 dark:bg-brand-900/30', border:'border-brand-300 dark:border-brand-700' },
-        archive:  { txt:'text-slate-700 dark:text-slate-200', bg:'bg-slate-200 dark:bg-slate-600',    border:'border-slate-400 dark:border-slate-500' },
-        ended:    { txt:'text-rose-600 dark:text-rose-400',   bg:'bg-rose-100 dark:bg-rose-900/30',   border:'border-rose-300 dark:border-rose-700' },
+        all:           { txt:'text-blue-600 dark:text-blue-400',    bg:'bg-blue-100 dark:bg-blue-900/30',    border:'border-blue-300 dark:border-blue-700'    },
+        pending:       { txt:'text-amber-600 dark:text-amber-400',  bg:'bg-amber-100 dark:bg-amber-900/30',  border:'border-amber-300 dark:border-amber-700'  },
+        approved:      { txt:'text-brand-600 dark:text-brand-400',  bg:'bg-brand-100 dark:bg-brand-900/30',  border:'border-brand-300 dark:border-brand-700'  },
+        archive:       { txt:'text-slate-700 dark:text-slate-200',  bg:'bg-slate-200 dark:bg-slate-600',     border:'border-slate-400 dark:border-slate-500'  },
+        ended:         { txt:'text-rose-600 dark:text-rose-400',    bg:'bg-rose-100 dark:bg-rose-900/30',    border:'border-rose-300 dark:border-rose-700'    },
+        announcements: { txt:'text-orange-600 dark:text-orange-400',bg:'bg-orange-100 dark:bg-orange-900/30',border:'border-orange-300 dark:border-orange-700'},
     };
 
-    ['all', 'pending', 'approved', 'archive', 'ended'].forEach(function (t) {
+    ['all', 'pending', 'approved', 'archive', 'ended', 'announcements'].forEach(function (t) {
         var btn = document.getElementById('tab-' + t);
         if (!btn) return;
         btn.className = 'tab-btn flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all '
@@ -192,29 +193,42 @@ function setTab(tab) {
                 : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700');
     });
 
-    // ── Toggle archive content vs normal event grid ──
-    var archiveContent = document.getElementById('archive-tab-content');
-    var eventGrid      = document.getElementById('eventGrid');
-    var emptyAll       = document.getElementById('empty-all');
+    // ── Grab all panel references ──────────────────────────────
+    var archiveContent       = document.getElementById('archive-tab-content');
+    var announcementsContent = document.getElementById('announcements-tab-content');
+    var eventGrid            = document.getElementById('eventGrid');
 
-    if (tab === 'archive') {
-        // Show archive panel
-        if (archiveContent) archiveContent.classList.remove('hidden');
-        // Hide event grid and all empty-state placeholders
+    // ── Helpers ────────────────────────────────────────────────
+    function hideEventPanels() {
         if (eventGrid) eventGrid.style.display = 'none';
         ['pending', 'approved', 'ended'].forEach(function (t) {
             var el = document.getElementById('empty-' + t);
             if (el) el.classList.add('hidden');
         });
-        if (emptyAll) emptyAll.classList.add('hidden');
-    } else {
-        // Hide archive panel
-        if (archiveContent) archiveContent.classList.add('hidden');
-        // Restore event grid
+    }
+
+    function showEventGrid() {
         if (eventGrid) eventGrid.style.display = '';
-        // Re-run filter so the correct cards show
         var searchInput = document.getElementById('searchInput');
         filterEvents(searchInput ? searchInput.value : '');
+    }
+
+    // ── Ensure all special panels are hidden first ─────────────
+    if (archiveContent)       archiveContent.classList.add('hidden');
+    if (announcementsContent) announcementsContent.classList.add('hidden');
+
+    // ── Now activate the selected tab ──────────────────────────
+    if (tab === 'archive') {
+        if (archiveContent) archiveContent.classList.remove('hidden');
+        hideEventPanels();
+
+    } else if (tab === 'announcements') {
+        if (announcementsContent) announcementsContent.classList.remove('hidden');
+        hideEventPanels();
+
+    } else {
+        // All / Pending / Approved / Ended — show event grid
+        showEventGrid();
     }
 }
 
@@ -225,15 +239,13 @@ function setTab(tab) {
 document.addEventListener('DOMContentLoaded', function () {
     initCounts();
 
-    // Auto-switch to archive tab when arriving from a restore / perm-delete redirect
+    // Auto-switch to the right tab when arriving from a redirect
     var p = new URLSearchParams(window.location.search);
-    if (
-        p.get('restored_event') ||
-        p.get('restored_ann')   ||
-        p.get('perm_deleted_event') ||
-        p.get('perm_deleted_ann')
-    ) {
+
+    if (p.get('restored_event') || p.get('perm_deleted_event')) {
         setTab('archive');
+    } else if (p.get('restored_ann') || p.get('perm_deleted_ann') || p.get('ann_success') || p.get('ann_deleted')) {
+        setTab('announcements');
     } else {
         setTab('all');
     }
