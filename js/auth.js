@@ -106,31 +106,31 @@
     // ═══════════════════════════════════════════════════════
     // Student Number — mask + FORMAT validation + DB check
     //
-    // BUG FIX: Previously, "Valid student number ✓" was shown
-    // purely on regex format match — it never checked the DB.
-    // Now, after the format passes, an AJAX call is made to
-    // /check_snum.php to verify uniqueness before showing green.
+    // After format passes, an AJAX call is made to
+    // /check_snum.php which queries BOTH profiles AND organizer
+    // tables. If the number exists in either, the border turns
+    // red and an inline alert is shown.
     // ═══════════════════════════════════════════════════════
     function initStudentNumberMask() {
         const input = document.getElementById("studentNumInput");
         if (!input) return;
 
-        // Track the last AJAX-checked value so we don't re-check
-        // the same number on every keystroke.
+        // Track the last AJAX-checked value and whether it was taken
         let lastChecked   = "";   // last value sent to the server
+        let lastWasTaken  = false;// result of the last completed check
         let checkDebounce = null; // debounce timer handle
 
         // ── Mask helper ──────────────────────────────────────
         function applyMask(digits) {
             digits = digits.slice(0, 8);
-            if (digits.length <= 2)      return digits;
+            if (digits.length <= 2)       return digits;
             else if (digits.length === 3) return digits.slice(0, 2) + "-" + digits.slice(2);
             else return digits.slice(0, 2) + "-" + digits.slice(2, 3) + "-" + digits.slice(3);
         }
 
         const hintEl = document.getElementById("snumFormatHint");
 
-        // ── Three visual states ──────────────────────────────
+        // ── Four visual states ───────────────────────────────
         function setNeutral() {
             const wrap = input.closest(".input-wrap");
             if (wrap) { wrap.style.borderColor = ""; wrap.style.boxShadow = ""; }
@@ -150,15 +150,20 @@
         }
 
         function setValid() {
+            lastWasTaken = false;
             const wrap = input.closest(".input-wrap");
             if (wrap) { wrap.style.borderColor = "#10b981"; wrap.style.boxShadow = "0 0 0 3px rgba(16,185,129,0.12)"; }
             if (hintEl) {
                 hintEl.style.color = "#10b981";
                 hintEl.innerHTML   = '<i class="fa-solid fa-circle-check" style="font-size:10px;"></i> Valid &amp; available ✓';
             }
+            // Dismiss any stale "taken" alert
+            const alert = document.getElementById("jsInlineAlert");
+            if (alert) alert.remove();
         }
 
         function setFormatError() {
+            lastWasTaken = false;
             const wrap = input.closest(".input-wrap");
             if (wrap) { wrap.style.borderColor = "#ef4444"; wrap.style.boxShadow = "0 0 0 3px rgba(239,68,68,0.10)"; }
             if (hintEl) {
@@ -167,8 +172,8 @@
             }
         }
 
-        // ── FIX: setTaken — shows red "already exists" state ──
         function setTaken(message) {
+            lastWasTaken = true;
             const wrap = input.closest(".input-wrap");
             if (wrap) { wrap.style.borderColor = "#ef4444"; wrap.style.boxShadow = "0 0 0 3px rgba(239,68,68,0.10)"; }
             if (hintEl) {
@@ -177,40 +182,48 @@
                     '<i class="fa-solid fa-circle-xmark" style="font-size:10px;"></i> ' +
                     (message || "Student number already exists.");
             }
-            // Also show top-of-form alert so it's unmissable
+            // Top-of-form alert so it's unmissable
             showInlineAlert(
-                "Student number <strong>" + input.value + "</strong> already exists. " +
+                "Student number <strong>" + input.value + "</strong> is already taken. " +
                 (message || ""),
                 "error"
             );
         }
 
         // ── AJAX uniqueness check ────────────────────────────
-        // Called after format passes; debounced 600 ms to avoid
-        // flooding the server while the user is still typing.
+        // Queries /check_snum.php which checks BOTH profiles
+        // and organizer tables server-side.
         function checkUniqueness(value) {
-            if (value === lastChecked) return; // skip if same value
+            if (value === lastChecked) {
+                // Re-apply the cached result without a new request
+                if (lastWasTaken) {
+                    const h = hintEl ? hintEl.innerHTML : "";
+                    // hint already shows the error; re-show the top alert
+                    showInlineAlert(
+                        "Student number <strong>" + value + "</strong> is already taken.",
+                        "error"
+                    );
+                }
+                return;
+            }
             lastChecked = value;
             setChecking();
 
             fetch("/check_snum.php?snum=" + encodeURIComponent(value))
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
-                    // Make sure the input hasn't changed while we were waiting
+                    // Guard: ignore if the user already changed the input
                     if (input.value !== value) return;
 
                     if (data.available) {
                         setValid();
-                        // Dismiss top-level alert if it was about this number
-                        const alert = document.getElementById("jsInlineAlert");
-                        if (alert) alert.remove();
                     } else {
                         setTaken(data.message || "");
                     }
                 })
                 .catch(function () {
-                    // Network/server error — fall back to format-only (green)
-                    // so the user can still submit; PHP will catch it server-side.
+                    // Network / server error — fail open;
+                    // PHP will catch it on submit.
                     if (input.value === value) setValid();
                 });
         }
@@ -220,24 +233,26 @@
             clearTimeout(checkDebounce);
 
             if (!value) {
-                lastChecked = "";
+                lastChecked  = "";
+                lastWasTaken = false;
                 setNeutral();
                 return;
             }
 
             if (!SNUM_REGEX.test(value)) {
-                lastChecked = "";
+                lastChecked  = "";
+                lastWasTaken = false;
                 setFormatError();
                 return;
             }
 
-            // Format is OK — debounce the AJAX call
+            // Format is OK — debounce the AJAX call (600 ms)
             checkDebounce = setTimeout(function () {
                 checkUniqueness(value);
             }, 600);
         }
 
-        // ── Keystroke guard ──────────────────────────────────
+        // ── Keystroke guard (digits only) ────────────────────
         input.addEventListener("keydown", function (e) {
             const nav = ["Backspace","Delete","ArrowLeft","ArrowRight","Home","End","Tab"];
             if (nav.includes(e.key) || e.ctrlKey || e.metaKey) return;
@@ -283,8 +298,21 @@
                     const val  = input.value.trim();
                     const wrap = input.closest(".input-wrap");
 
-                    // Block if format is wrong
-                    if (val && !SNUM_REGEX.test(val)) {
+                    // Block: empty
+                    if (!val) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        setFormatError();
+                        showInlineAlert("Student number is required.", "error");
+                        input.focus();
+                        setTimeout(function () {
+                            wrap.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 350);
+                        return;
+                    }
+
+                    // Block: wrong format
+                    if (!SNUM_REGEX.test(val)) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
                         setFormatError();
@@ -300,9 +328,8 @@
                         return;
                     }
 
-                    // Block if AJAX already determined it's taken
-                    // (border is red AND value matches lastChecked taken value)
-                    if (wrap && wrap.style.borderColor === "rgb(239, 68, 68)" && val === lastChecked) {
+                    // Block: AJAX already determined taken
+                    if (lastWasTaken && val === lastChecked) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
                         showInlineAlert(
@@ -319,7 +346,7 @@
             }, true);
         }
 
-        // Run once on load
+        // Run once on load (repopulated value after failed submit)
         validateAndTriggerCheck(input.value);
     }
 
@@ -511,7 +538,7 @@
     }
 
     // ═══════════════════════════════════════════════════════
-    // Role-change field visibility
+    // Role-change field visibility + required attributes
     // ═══════════════════════════════════════════════════════
     const FIELD_IDS = [
         "adminWarningWrap", "adminKeyWrap", "academicHeader",
@@ -525,6 +552,7 @@
         document.getElementById("orgLogoWrap").classList.add("hidden-field");
         document.getElementById("clubLogoWrap").classList.add("hidden-field");
 
+        // Clear all role-specific required flags
         const academicInputIds = [
             "deptSelect", "studentNumInput", "yearLevelSelect",
             "sectionSelect", "positionSelect"
@@ -534,11 +562,17 @@
             if (el) el.removeAttribute("required");
         });
 
+        // Reset snum border when role changes
         const snumInput = document.getElementById("studentNumInput");
         const snumWrap  = snumInput && snumInput.closest(".input-wrap");
         if (snumWrap) {
             snumWrap.style.borderColor = "";
             snumWrap.style.boxShadow   = "";
+        }
+        const hintEl = document.getElementById("snumFormatHint");
+        if (hintEl) {
+            hintEl.style.color = "#c7d0dd";
+            hintEl.innerHTML   = '<i class="fa-solid fa-circle-info" style="font-size:10px;"></i> Format: YY-N-NNNNN &nbsp;(e.g.&nbsp;24-1-05560)';
         }
 
         const membershipTitle = document.getElementById("membershipTitle");
@@ -568,7 +602,7 @@
                 if (el) el.setAttribute("required", "required");
             });
             if (orgSelect)  orgSelect.setAttribute("required", "required");
-            if (clubSelect) clubSelect.setAttribute("required", "required");
+            if (clubSelect) orgSelect.setAttribute("required", "required");
         }
 
         updateLogoVisibility();

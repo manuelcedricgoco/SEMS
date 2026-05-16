@@ -685,7 +685,7 @@ $post_club     = $_POST['club_id']   ?? '';
                                 <div class="field-label">Middle Name</div>
                                 <div class="input-wrap">
                                     <span class="icon"><i class="fa-solid fa-user"></i></span>
-                                    <input type="text" name="middle_name" placeholder="Santos"
+                                    <input type="text" name="middle_name" placeholder="Santos" required
                                            value="<?= $post_mname ?>">
                                 </div>
                             </div>
