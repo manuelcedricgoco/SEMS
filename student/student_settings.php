@@ -191,9 +191,12 @@ $welcomeName     = trim($fn . $mn . ' ' . $ln) ?: 'Student';
   <aside class="sidebar" id="sidebar" aria-label="Main navigation">
 
     <div class="sb-brand">
-      <div class="sb-logo" aria-hidden="true">
-        <i data-lucide="graduation-cap" style="width:18px;height:18px;color:#fff;"></i>
-      </div>
+      <div class="sb-logo" aria-hidden="true"
+     style="background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 40%, #a855f7 100%);
+            box-shadow: 0 4px 14px rgba(139,92,246,.55), 0 0 0 3px rgba(167,139,250,.18);
+            border: 1px solid rgba(167,139,250,.3);">
+    <i data-lucide="graduation-cap" style="width:18px;height:18px;color:#fff;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3));"></i>
+</div>
       <div>
         <div class="sb-name">SEMS</div>
         <div class="sb-tagline">Student Portal</div>
@@ -226,6 +229,12 @@ $welcomeName     = trim($fn . $mn . ' ' . $ln) ?: 'Student';
       <a href="student_feedback.php" class="sb-link">
         <i data-lucide="message-square" style="width:15px;height:15px;"></i>
         Feedback
+      </a>
+
+      <a href="student_chat.php" class="sb-link " aria-current="page">
+        <i data-lucide="message-circle" style="width:15px;height:15px;"></i>
+        Messages
+        <span id="sidebarBadge" style="display:none;margin-left:auto;background:var(--purple);color:#fff;border-radius:999px;font-size:.65rem;font-weight:700;padding:.1rem .45rem;"></span>
       </a>
 
       <div class="sb-section">Account</div>
@@ -306,7 +315,7 @@ $welcomeName     = trim($fn . $mn . ' ' . $ln) ?: 'Student';
         <button class="dark-toggle" id="darkToggleDesktop" onclick="toggleDark()" style="flex-shrink:0;margin-top:.25rem;">
           <i data-lucide="sun"  id="sunD"  style="width:14px;height:14px;display:none;"></i>
           <i data-lucide="moon" id="moonD" style="width:14px;height:14px;"></i>
-          <span>Theme</span>
+          <span></span>
         </button>
       </div>
 

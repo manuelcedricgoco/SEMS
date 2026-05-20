@@ -53,14 +53,17 @@ $adminData = $adminStmt->fetch(PDO::FETCH_ASSOC);
 
 // ── PARSE ADMIN NAME PARTS ──
 // Purpose: I-extract ang individual name fields; fallback to empty string kung wala
-$adminFirstName  = $adminData['first_name']   ?? '';
-$adminLastName   = $adminData['last_name']    ?? '';
-$adminMiddleName = $adminData['middle_name']  ?? '';
+$adminFirstName  = $adminData['first_name']  ?? '';
+$adminLastName   = $adminData['last_name']   ?? '';
+$adminMiddleName = $adminData['middle_name'] ?? '';
 
-// ── BUILD FULL NAME ──
-// Purpose: I-concatenate ang first, middle, at last name; i-sanitize via htmlspecialchars
-$adminFullName = trim($adminFirstName . ' ' . $adminMiddleName . ' ' . $adminLastName);
-$adminFullName = $adminFullName !== '' ? htmlspecialchars($adminFullName) : 'Administrator';
+$adminMiddleInitial = !empty($adminMiddleName) ? strtoupper(substr($adminMiddleName, 0, 1)) . '.' : '';
+$adminFullName      = trim($adminFirstName . ' ' . $adminMiddleInitial . ' ' . $adminLastName) ?: 'Administrator';
+$adminInitials      = strtoupper(
+    substr($adminFirstName,  0, 1) .
+    substr($adminMiddleName, 0, 1) .
+    substr($adminLastName,   0, 1)
+) ?: 'A';
 
 // ── SANITIZE OTHER FIELDS ──
 // Purpose: I-protect ang email at phone mula sa XSS attacks via htmlspecialchars
@@ -318,6 +321,14 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                     </a>
                 <?php endforeach; ?>
 
+                <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Communication</p>
+            <a href="/admin/admin_chat.php"
+               class="nav-item  flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
+                <i class="fas fa-comments w-5 text-center"></i>
+                Messages
+                <span id="sidebarBadge" class="ml-auto hidden text-[10px] font-bold bg-primary-500 text-white rounded-full px-1.5 py-0.5"></span>
+            </a>
+
                 <!-- Insights Section -->
                 <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Insights</p>
                 <a href="/admin/admin_insight.php"
@@ -391,16 +402,16 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Administrator</p>
                     </div>
                     <div class="relative cursor-pointer">
-                        <?php if ($adminAvatar): ?>
-                            <img src="<?= $adminAvatar ?>" alt="<?= $adminFullName ?>"
-                                class="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-md">
-                        <?php else: ?>
-                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white text-sm font-bold shadow-md">
-                                <?= strtoupper(substr($adminFirstName, 0, 1) . substr($adminLastName, 0, 1)) ?>
-                            </div>
-                        <?php endif; ?>
-                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
-                    </div>
+    <?php if ($adminAvatar): ?>
+        <img src="<?= $adminAvatar ?>" alt="<?= $adminFullName ?>"
+            class="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-md">
+    <?php else: ?>
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white text-sm font-bold shadow-md">
+            <?= $adminInitials ?>
+        </div>
+    <?php endif; ?>
+    <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
+</div>
                 </div>
             </header>
 

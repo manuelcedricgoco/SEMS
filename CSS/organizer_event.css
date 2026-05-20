@@ -1,176 +1,466 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   organizer_event.css
-   Extracted from organizer_event.php — do NOT modify the original PHP file.
+   organizer_event.css  — Enhanced Edition
+   Richer micro-interactions · Polished states · Fluid transitions
    ══════════════════════════════════════════════════════════════════════════════ */
 
 /* ── Alpine.js cloak ── */
-[x-cloak] {
-  display: none !important;
+[x-cloak] { display: none !important; }
+
+/* ── Custom Properties ────────────────────────────────────────────────────── */
+:root {
+  --brand:       #22c55e;
+  --brand-mid:   #16a34a;
+  --brand-light: rgba(34,197,94,.12);
+  --brand-glow:  rgba(34,197,94,.25);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.13);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-smooth: cubic-bezier(.4,0,.2,1);
+  --ease-out:    cubic-bezier(0,0,.2,1);
+}
+.dark {
+  --brand-light: rgba(34,197,94,.15);
+  --brand-glow:  rgba(74,222,128,.2);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.5);
 }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 99px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #374151;
-}
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 99px; transition: background .2s; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.dark ::-webkit-scrollbar-thumb       { background: #374151; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
 
-/* ── Entrance animations ── */
+/* ── Base focus ring ──────────────────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ENTRANCE ANIMATIONS
+   ══════════════════════════════════════════════════════════════════════════════ */
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-.anim-up {
-  animation: fadeUp 0.45s ease both;
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(.93); }
+  to   { opacity: 1; transform: scale(1); }
 }
-.anim-left {
-  animation: fadeLeft 0.4s ease both;
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
-.d-0 {
-  animation-delay: 0ms;
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0   var(--brand-glow); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
 }
-.d-1 {
-  animation-delay: 70ms;
+@keyframes bounceIn {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  80%  { transform: scale(.95); }
+  100% { transform: scale(1); opacity: 1; }
 }
-.d-2 {
-  animation-delay: 140ms;
+@keyframes spinOnce {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
-.d-3 {
-  animation-delay: 210ms;
+@keyframes floatY {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
 }
-.d-4 {
-  animation-delay: 280ms;
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
 }
-.d-5 {
-  animation-delay: 350ms;
+@keyframes shrinkBar {
+  from { width: 100%; }
+  to   { width: 0%; }
 }
 
-/* ── Sidebar nav-link (active left-border) ── */
+.anim-up   { animation: fadeUp  0.45s var(--ease-out)    both; }
+.anim-left { animation: fadeLeft 0.40s var(--ease-out)   both; }
+
+.d-0 { animation-delay:   0ms; }
+.d-1 { animation-delay:  70ms; }
+.d-2 { animation-delay: 140ms; }
+.d-3 { animation-delay: 210ms; }
+.d-4 { animation-delay: 280ms; }
+.d-5 { animation-delay: 350ms; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ══════════════════════════════════════════════════════════════════════════════ */
 .nav-link {
   position: relative;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: background .2s var(--ease-smooth), color .2s var(--ease-smooth);
 }
 .nav-link::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 20%;
-  bottom: 20%;
+  left: 0; top: 15%; bottom: 15%;
   width: 3px;
   border-radius: 0 4px 4px 0;
-  background: #22c55e;
+  background: var(--brand);
   transform: scaleY(0);
-  transition: transform 0.25s;
+  transition: transform .28s var(--ease-spring);
+  transform-origin: center;
 }
-.nav-link:hover::before,
-.nav-link.active::before {
-  transform: scaleY(1);
+.nav-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--brand-light);
+  opacity: 0;
+  transition: opacity .2s;
 }
-.nav-link.active {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
-}
-.dark .nav-link.active {
-  color: #4ade80;
-  background: rgba(34, 197, 94, 0.15);
-}
+.nav-link:hover::before, .nav-link.active::before { transform: scaleY(1); }
+.nav-link:hover::after  { opacity: .6; }
+.nav-link.active::after { opacity: 1; }
 
-/* ── Card hover ── */
+.nav-link.active { background: var(--brand-light); color: var(--brand-mid); font-weight: 600; }
+.dark .nav-link.active { color: #4ade80; background: var(--brand-light); }
+
+.nav-link .icon-wrap {
+  transition: transform .3s var(--ease-spring), box-shadow .3s var(--ease-smooth);
+  position: relative; z-index: 1;
+}
+.nav-link:hover .icon-wrap  { transform: scale(1.15) rotate(-3deg); box-shadow: 0 4px 10px -2px var(--brand-glow); }
+.nav-link.active .icon-wrap { transform: scale(1.08); box-shadow: 0 2px 8px -2px var(--brand-glow); }
+
+/* Sidebar footer links */
+a[href*="organizer_settings.php"],
+a[href*="logout.php"] {
+  transition: background .2s, color .2s, padding-left .2s var(--ease-out);
+}
+a[href*="organizer_settings.php"]:hover { padding-left: 1.1rem; }
+a[href*="logout.php"]:hover {
+  padding-left: 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,.15);
+}
+a[href*="logout.php"]:hover .icon-wrap { animation: spinOnce .5s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
 .card-hover {
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
+  transition: transform .28s var(--ease-spring), box-shadow .28s var(--ease-smooth), border-color .2s;
+  box-shadow: var(--shadow-card);
+  will-change: transform;
 }
 .card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-5px) scale(1.005);
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(34,197,94,.2) !important;
 }
 .dark .card-hover:hover {
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(74,222,128,.18) !important;
 }
 
-/* ── Icon animate ── */
+/* Accent bar widens on hover */
+.card-hover > div.h-1\.5 { transition: filter .2s; }
+.card-hover:hover > div.h-1\.5 { filter: brightness(1.1); }
+
+/* Icon wrap */
 .icon-wrap {
-  transition: transform 0.25s ease;
+  transition: transform .3s var(--ease-spring), box-shadow .3s var(--ease-smooth), filter .2s;
+  flex-shrink: 0;
 }
 .card-hover:hover .icon-wrap {
-  transform: scale(1.12) rotate(4deg);
+  transform: scale(1.18) rotate(6deg);
+  box-shadow: 0 6px 14px -4px var(--brand-glow);
+  filter: brightness(1.08);
 }
 
-/* ── Modal pop animation ── */
-@keyframes modalPop {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+/* Progress bars inside cards */
+.card-hover .h-2 > div {
+  transition: width .8s var(--ease-out);
+  position: relative; overflow: hidden;
 }
-.modal-pop {
-  animation: modalPop 0.28s ease both;
+.card-hover .h-2 > div::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.3) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
 }
 
-/* ── Tab button transition ── */
+/* Stat card accent side bar */
+.card-hover > div.w-1 { transition: width .25s var(--ease-spring); }
+.card-hover:hover > div.w-1 { width: 5px; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TAB BAR
+   ══════════════════════════════════════════════════════════════════════════════ */
 .tab-btn {
-  transition: all 0.2s ease;
+  transition: background .2s var(--ease-smooth), color .2s, transform .2s var(--ease-spring), box-shadow .2s;
+  position: relative;
+}
+.tab-btn:hover { transform: translateY(-1px); }
+.tab-btn:active { transform: scale(.95); }
+
+/* Active tab glow */
+.tab-btn[id*="tab-"][class*="bg-"] {
+  box-shadow: 0 4px 12px -3px var(--brand-glow);
+  animation: pulseRing 2.5s ease infinite;
 }
 
-/* ── Mobile sidebar overlay ── */
+/* Tab count badges */
+.tab-btn span[class*="rounded-full"] {
+  transition: transform .2s var(--ease-spring), background .2s;
+}
+.tab-btn:hover span[class*="rounded-full"] { transform: scale(1.15); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HEADER ELEMENTS
+   ══════════════════════════════════════════════════════════════════════════════ */
+/* Search */
+#searchInput {
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+#searchInput:focus { box-shadow: 0 0 0 3px var(--brand-glow); }
+
+/* Theme toggle */
+button:has(#themeIcon) {
+  transition: background .2s, transform .3s var(--ease-spring), box-shadow .2s;
+}
+button:has(#themeIcon):hover  { transform: rotate(20deg) scale(1.1); box-shadow: 0 0 12px var(--brand-glow); }
+button:has(#themeIcon):active { transform: rotate(20deg) scale(.95); }
+
+/* Profile avatar */
+div[class*="rounded-full"][class*="ring-2"] {
+  transition: transform .25s var(--ease-spring), box-shadow .25s var(--ease-smooth);
+}
+div[class*="rounded-full"][class*="ring-2"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--brand-glow), 0 6px 16px -4px rgba(34,197,94,.3);
+}
+
+/* New Event / Announce buttons in header */
+button[class*="bg-brand-5"]:hover,
+button[class*="bg-orange-5"]:hover {
+  transform: translateY(-1px) scale(1.02);
+}
+button[class*="bg-brand-5"]:active,
+button[class*="bg-orange-5"]:active { transform: scale(.96); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL — shared
+   ══════════════════════════════════════════════════════════════════════════════ */
+.modal-pop { animation: modalPop .3s var(--ease-spring) both; }
+
+/* Backdrop fade */
+div[x-show][class*="fixed inset-0"] {
+  transition: opacity .25s var(--ease-out);
+}
+
+/* Modal close × rotates */
+button[class*="hover:text-red"]:hover > i.fa-times { animation: spinOnce .3s var(--ease-spring); }
+button[\@click*="close"]:hover { transform: rotate(90deg) scale(1.1); transition: transform .2s var(--ease-spring); }
+
+/* Form inputs inside modals */
+input[type="text"],
+input[type="datetime-local"],
+select,
+textarea {
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+input[type="text"]:focus,
+input[type="datetime-local"]:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 3px var(--brand-glow);
+}
+
+/* Announcement modal inputs — orange focus */
+#annModal input[type="text"]:focus,
+#annModal textarea:focus {
+  box-shadow: 0 0 0 3px rgba(249,115,22,.2);
+}
+
+/* Checkbox bounce */
+input[type="checkbox"]:checked { animation: bounceIn .3s var(--ease-spring); }
+
+/* Access type toggle buttons (General / Required) */
+label[class*="cursor-pointer"] span[class*="rounded-xl"] {
+  transition: background .2s, color .2s, border-color .2s, box-shadow .2s, transform .2s var(--ease-spring);
+}
+label[class*="cursor-pointer"]:hover span[class*="rounded-xl"] { transform: translateY(-1px); }
+label[class*="cursor-pointer"]:active span[class*="rounded-xl"] { transform: scale(.97); }
+
+/* Submit buttons */
+button[name="submit_event"],
+button[name="submit_announcement"] {
+  position: relative; overflow: hidden;
+  transition: background .2s, transform .2s var(--ease-spring), box-shadow .25s;
+}
+button[name="submit_event"]::after,
+button[name="submit_announcement"]::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%);
+  background-size: 200% 100%; opacity: 0; transition: opacity .2s;
+}
+button[name="submit_event"]:hover::after,
+button[name="submit_announcement"]:hover::after { opacity: 1; animation: shimmer .7s linear; }
+button[name="submit_event"]:hover       { transform: translateY(-1px) scale(1.01); box-shadow: 0 6px 16px -4px var(--brand-glow); }
+button[name="submit_announcement"]:hover { transform: translateY(-1px) scale(1.01); box-shadow: 0 6px 16px -4px rgba(249,115,22,.4); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   EVENT GRID CARDS  — per-card group interactions
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Title color shift on group hover */
+.filterable-event h4 {
+  transition: color .2s;
+}
+
+/* Status pill hover glow */
+span[class*="rounded-full"][class*="text-brand"]  { transition: box-shadow .2s; }
+span[class*="rounded-full"][class*="text-brand"]:hover  { box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+span[class*="rounded-full"][class*="text-amber"]  { transition: box-shadow .2s; }
+span[class*="rounded-full"][class*="text-amber"]:hover  { box-shadow: 0 0 0 3px rgba(245,158,11,.2); }
+span[class*="rounded-full"][class*="text-red"]    { transition: box-shadow .2s; }
+span[class*="rounded-full"][class*="text-red"]:hover    { box-shadow: 0 0 0 3px rgba(239,68,68,.2); }
+span[class*="rounded-full"][class*="text-rose"]   { transition: box-shadow .2s; }
+span[class*="rounded-full"][class*="text-rose"]:hover   { box-shadow: 0 0 0 3px rgba(244,63,94,.2); }
+
+/* Details button */
+button[class*="far fa-eye"]:hover,
+button:has(.fa-eye):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -3px rgba(59,130,246,.3);
+}
+
+/* QR scan link */
+a[href*="organizer_qrscan.php?event"]:hover {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 4px 12px -3px var(--brand-glow);
+}
+a[href*="organizer_qrscan.php?event"]:hover .fa-qrcode { animation: spinOnce .4s var(--ease-spring); }
+
+/* Archive button */
+button:has(.fa-box-archive):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px -3px rgba(100,116,139,.3);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ANNOUNCEMENT CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
+/* Pinned ring pulse */
+div[class*="ring-2"][class*="ring-orange"] {
+  animation: pulseRing 3s ease infinite;
+}
+
+/* "Pinned" thumbtack icon floats on card hover */
+.card-hover:hover .fa-thumbtack { animation: floatY .6s var(--ease-spring); }
+
+/* Read button */
+button:has(.fa-eye):hover {
+  box-shadow: 0 3px 10px -2px rgba(59,130,246,.25);
+  transform: translateY(-1px);
+}
+
+/* Archive announcement button */
+button:has(.fa-box-archive):hover {
+  box-shadow: 0 3px 10px -2px rgba(100,116,139,.25);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ARCHIVE TAB — restore / delete buttons
+   ══════════════════════════════════════════════════════════════════════════════ */
+/* Archived cards fade up to full opacity on hover */
+div[class*="opacity-75"] { transition: opacity .25s var(--ease-smooth); }
+
+/* Restore button */
+button[name="restore_event"]:hover,
+button[name="restore_announcement"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -3px var(--brand-glow);
+}
+
+/* Permanent delete */
+button[\@click*="showPermDel"]:hover,
+button[\@click*="permDel"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -3px rgba(239,68,68,.3);
+}
+
+/* Restore icon spins */
+button[name="restore_event"]:hover .fa-rotate-left,
+button[name="restore_announcement"]:hover .fa-rotate-left {
+  animation: spinOnce .4s var(--ease-spring);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FLASH / ALERT BANNERS
+   ══════════════════════════════════════════════════════════════════════════════ */
+#success-alert,
+div[class*="bg-brand-50"],
+div[class*="bg-red-50"],
+div[class*="bg-slate-50"],
+div[class*="bg-orange-50"] {
+  animation: fadeUp .4s var(--ease-spring) both;
+}
+#success-alert .fa-circle-check { animation: bounceIn .4s var(--ease-spring) .15s both; }
+
+/* ── Auto-dismiss progress bar ─ */
+.reload-progress { animation: shrinkBar 2.5s linear forwards; }
+
+/* Dismiss button hover */
+div[id="success-alert"] button:hover { transform: scale(1.15); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SECTION HEADER "View all →" links
+   ══════════════════════════════════════════════════════════════════════════════ */
+a[class*="hover:underline"] .fa-arrow-right {
+  transition: transform .25s var(--ease-spring);
+}
+a[class*="hover:underline"]:hover .fa-arrow-right { transform: translateX(4px); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SCROLL-TO-TOP BUTTON
+   ══════════════════════════════════════════════════════════════════════════════ */
+button[onclick*="scrollTo"] {
+  transition: background .2s, transform .25s var(--ease-spring), box-shadow .2s, border-color .2s;
+}
+button[onclick*="scrollTo"]:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 8px 20px -4px var(--brand-glow);
+}
+button[onclick*="scrollTo"]:active { transform: scale(.93); }
+button[onclick*="scrollTo"]:hover .fa-chevron-up { animation: floatY .4s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR OVERLAY
+   ══════════════════════════════════════════════════════════════════════════════ */
 #sb-overlay {
   display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(3px);
   z-index: 40;
+  opacity: 0;
+  transition: opacity .3s var(--ease-smooth);
 }
-#sb-overlay.show {
-  display: block;
-}
+#sb-overlay.show { display: block; opacity: 1; }
+#sidebar { transition: transform .32s var(--ease-spring); }
 
-/* ── Chart container ── */
-.chart-wrap {
-  position: relative;
-  height: 260px;
-}
-
-/* ── Auto-dismiss progress bar animation ── */
-@keyframes shrinkBar {
-  from {
-    width: 100%;
+/* ══════════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ══════════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
-  to {
-    width: 0%;
-  }
-}
-.reload-progress {
-  animation: shrinkBar 2.5s linear forwards;
 }

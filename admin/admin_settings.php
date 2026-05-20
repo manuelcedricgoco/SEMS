@@ -292,7 +292,10 @@ $user = fetchUser($uid);
 // para magamit bilang src ng <img> tag sa HTML
 $avatarSrc = '';
 if (!empty($user['profile_image'])) {
-    $avatarSrc = 'data:image/jpeg;base64,' . base64_encode($user['profile_image']);
+    $fi       = new finfo(FILEINFO_MIME_TYPE);
+    $mimeType = $fi->buffer($user['profile_image']);
+    if (!$mimeType || strpos($mimeType, 'image/') !== 0) $mimeType = 'image/jpeg';
+    $avatarSrc = 'data:' . $mimeType . ';base64,' . base64_encode($user['profile_image']);
 }
 
 
@@ -307,10 +310,11 @@ function e(string $v): string
 // ── DISPLAY NAME & ROLE BADGE ─────────────────────────────────
 // Pinagsama-sama ang buong pangalan ng user para sa display
 // Ginagamit ang 'Administrator' bilang fallback kung walang pangalan
+$middleInitial = !empty($user['middle_name']) ? strtoupper(substr($user['middle_name'], 0, 1)) . '.' : '';
 $fullName = trim(
-    ($user['first_name']  ?? '') . ' ' .
-    ($user['middle_name'] ?? '') . ' ' .
-    ($user['last_name']   ?? '')
+    ($user['first_name'] ?? '') . ' ' .
+    $middleInitial . ' ' .
+    ($user['last_name']  ?? '')
 ) ?: 'Administrator';
 
 // Kinukuha ang tamang label at kulay ng role badge batay sa role ng user
@@ -389,7 +393,7 @@ $roleBadge = [
             <!-- Logo section — nagpapakita ng SEMS branding sa itaas ng sidebar -->
             <div class="px-6 py-6 border-b border-gray-100 dark:border-slate-700">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/30">
                         <i class="fas fa-calendar-check text-white text-sm"></i>
                     </div>
                     <div>
@@ -437,6 +441,14 @@ $roleBadge = [
                     <i class="fas fa-building w-5 text-center"></i>
                     Organizations & Clubs
                 </a>
+
+                <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Communication</p>
+            <a href="/admin/admin_chat.php"
+               class="nav-item  flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
+                <i class="fas fa-comments w-5 text-center"></i>
+                Messages
+                <span id="sidebarBadge" class="ml-auto hidden text-[10px] font-bold bg-primary-500 text-white rounded-full px-1.5 py-0.5"></span>
+            </a>
 
                 <!-- Insights section label -->
                 <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Insights</p>

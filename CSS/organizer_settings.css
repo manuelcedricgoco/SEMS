@@ -1,202 +1,406 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   organizer_settings.css
-   Extracted from organizer_settings.php — do NOT modify the original PHP file.
+   organizer_settings.css  — Enhanced Edition
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+:root {
+  --brand:       #22c55e;
+  --brand-mid:   #16a34a;
+  --brand-light: rgba(34,197,94,.12);
+  --brand-glow:  rgba(34,197,94,.25);
+  --indigo-glow: rgba(99,102,241,.2);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.13);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-smooth: cubic-bezier(.4,0,.2,1);
+  --ease-out:    cubic-bezier(0,0,.2,1);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 99px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #374151;
+.dark {
+  --brand-light: rgba(34,197,94,.15);
+  --brand-glow:  rgba(74,222,128,.2);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.3);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.5);
 }
 
-/* ── Entrance animations ── */
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 99px; transition: background .2s; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.dark ::-webkit-scrollbar-thumb       { background: #374151; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+
+/* ══════════════════════════════════════════════════════════════
+   ENTRANCE ANIMATIONS
+   ══════════════════════════════════════════════════════════════ */
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.anim-up {
-  animation: fadeUp 0.42s ease both;
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
-.d-0 {
-  animation-delay: 0ms;
+@keyframes spinOnce {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
-.d-1 {
-  animation-delay: 70ms;
+@keyframes bounceIn {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  80%  { transform: scale(.95); }
+  100% { transform: scale(1); opacity: 1; }
 }
-.d-2 {
-  animation-delay: 140ms;
+@keyframes floatY {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
 }
-.d-3 {
-  animation-delay: 210ms;
-}
-.d-4 {
-  animation-delay: 280ms;
+@keyframes avatarPulse {
+  0%   { box-shadow: 0 0 0 0 var(--brand-glow); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-/* ── Sidebar nav-link (active left-border) ── */
+.anim-up { animation: fadeUp 0.42s var(--ease-out) both; }
+.d-0 { animation-delay:   0ms; }
+.d-1 { animation-delay:  70ms; }
+.d-2 { animation-delay: 140ms; }
+.d-3 { animation-delay: 210ms; }
+.d-4 { animation-delay: 280ms; }
+
+/* ══════════════════════════════════════════════════════════════
+   SIDEBAR
+   ══════════════════════════════════════════════════════════════ */
+#sidebar { transition: transform .32s var(--ease-spring); }
+
+#sb-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); backdrop-filter: blur(3px); z-index: 40;
+  opacity: 0; transition: opacity .3s var(--ease-smooth);
+}
+#sb-overlay.show { display: block; opacity: 1; }
+
 .nav-link {
   position: relative;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: background .2s var(--ease-smooth), color .2s;
 }
 .nav-link::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 20%;
-  bottom: 20%;
-  width: 3px;
-  border-radius: 0 4px 4px 0;
-  background: #22c55e;
-  transform: scaleY(0);
-  transition: transform 0.25s;
+  content: ""; position: absolute; left: 0; top: 15%; bottom: 15%;
+  width: 3px; border-radius: 0 4px 4px 0; background: var(--brand);
+  transform: scaleY(0); transition: transform .28s var(--ease-spring); transform-origin: center;
 }
-.nav-link:hover::before,
-.nav-link.active::before {
-  transform: scaleY(1);
+.nav-link::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: var(--brand-light); opacity: 0; transition: opacity .2s;
 }
-.nav-link.active {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
-}
-.dark .nav-link.active {
-  color: #4ade80;
-  background: rgba(34, 197, 94, 0.15);
-}
+.nav-link:hover::before, .nav-link.active::before { transform: scaleY(1); }
+.nav-link:hover::after  { opacity: .6; }
+.nav-link.active::after { opacity: 1; }
 
-/* ── Card hover ── */
-.card-hover {
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
-}
-.card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
-}
-.dark .card-hover:hover {
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.4);
-}
+.nav-link.active { background: var(--brand-light); color: var(--brand-mid); font-weight: 600; }
+.dark .nav-link.active { color: #4ade80; background: var(--brand-light); }
 
-/* ── Icon animate ── */
 .icon-wrap {
-  transition: transform 0.25s ease;
+  transition: transform .3s var(--ease-spring), box-shadow .3s;
+  position: relative; z-index: 1;
 }
-.nav-link:hover .icon-wrap {
-  transform: scale(1.1);
+.nav-link:hover .icon-wrap  { transform: scale(1.15) rotate(-3deg); box-shadow: 0 4px 10px -2px var(--brand-glow); }
+.nav-link.active .icon-wrap { transform: scale(1.08); }
+
+a[href*="logout.php"] {
+  transition: background .2s, color .2s, padding-left .2s var(--ease-out);
+}
+a[href*="logout.php"]:hover {
+  padding-left: 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,.15);
+}
+a[href*="logout.php"]:hover .icon-wrap { animation: spinOnce .5s var(--ease-spring); }
+
+/* Org logo */
+aside img[class*="rounded-xl"],
+aside div[class*="rounded-xl"][class*="bg-brand"] {
+  transition: transform .3s var(--ease-spring), box-shadow .3s;
+}
+aside img[class*="rounded-xl"]:hover,
+aside div[class*="rounded-xl"][class*="bg-brand"]:hover {
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 0 8px 20px -6px var(--brand-glow);
 }
 
-/* ── Profile photo upload zone ── */
+/* ══════════════════════════════════════════════════════════════
+   HEADER
+   ══════════════════════════════════════════════════════════════ */
+button:has(#themeIcon) {
+  transition: background .2s, transform .3s var(--ease-spring), box-shadow .2s;
+}
+button:has(#themeIcon):hover  { transform: rotate(20deg) scale(1.1); box-shadow: 0 0 12px var(--brand-glow); }
+button:has(#themeIcon):active { transform: rotate(20deg) scale(.95); }
+
+div[class*="rounded-full"][class*="ring-2"] {
+  transition: transform .25s var(--ease-spring), box-shadow .25s;
+}
+div[class*="rounded-full"][class*="ring-2"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--brand-glow), 0 6px 16px -4px rgba(34,197,94,.3);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CARDS
+   ══════════════════════════════════════════════════════════════ */
+.card-hover {
+  transition: transform .28s var(--ease-spring), box-shadow .28s var(--ease-smooth);
+  box-shadow: var(--shadow-card); will-change: transform;
+}
+.card-hover:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.dark .card-hover:hover { box-shadow: var(--shadow-lift); }
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE SUMMARY CARD — left column
+   ══════════════════════════════════════════════════════════════ */
+
+/* Avatar wrapper hover */
+div[class*="relative"][class*="w-24"] {
+  transition: transform .25s var(--ease-spring);
+}
+div[class*="relative"][class*="w-24"]:hover { transform: scale(1.04); }
+
+/* Avatar ring pulse when hovered */
+div[class*="relative"][class*="w-24"]:hover > div[class*="ring-4"] {
+  animation: avatarPulse 1.2s ease 1;
+}
+
+/* Info rows */
+div[class*="bg-gray-50"][class*="rounded-xl"][class*="px-4"][class*="py-2"] {
+  transition: background .15s, border-color .15s, transform .15s var(--ease-spring);
+}
+div[class*="bg-gray-50"][class*="rounded-xl"][class*="px-4"][class*="py-2"]:hover {
+  background: rgba(34,197,94,.04);
+  border-color: rgba(34,197,94,.2) !important;
+  transform: translateX(2px);
+}
+.dark div[class*="bg-gray-50"][class*="rounded-xl"][class*="px-4"][class*="py-2"]:hover {
+  background: rgba(34,197,94,.07);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PHOTO UPLOAD ZONE
+   ══════════════════════════════════════════════════════════════ */
 .upload-zone {
-  border: 2px dashed rgba(34, 197, 94, 0.3);
-  border-radius: 0.875rem;
-  padding: 1.5rem;
-  text-align: center;
-  cursor: pointer;
-  background: rgba(34, 197, 94, 0.04);
-  transition: all 0.25s ease;
+  border: 2px dashed rgba(34,197,94,.3);
+  border-radius: .875rem; padding: 1.5rem; text-align: center;
+  cursor: pointer; background: rgba(34,197,94,.04);
+  transition: border-color .25s, background .25s, transform .2s var(--ease-spring), box-shadow .2s;
 }
 .upload-zone:hover {
-  border-color: rgba(34, 197, 94, 0.6);
-  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34,197,94,.6);
+  background: rgba(34,197,94,.08);
+  transform: scale(1.01);
+  box-shadow: 0 4px 16px -4px var(--brand-glow);
 }
+.upload-zone:active { transform: scale(.99); }
 .upload-zone.has-file {
-  border-style: solid;
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
+  border-style: solid; border-color: #22c55e;
+  background: rgba(34,197,94,.1);
+  box-shadow: 0 2px 12px -4px var(--brand-glow);
 }
+.upload-zone .fa-cloud-arrow-up { transition: transform .3s var(--ease-spring); }
+.upload-zone:hover .fa-cloud-arrow-up { transform: translateY(-4px) scale(1.1); }
 
-/* ── Org / Club logo upload zone ── */
+/* Photo preview image */
+#photoPreviewImg {
+  transition: transform .25s var(--ease-spring), box-shadow .25s;
+}
+#photoPreviewImg:hover { transform: scale(1.05); box-shadow: 0 6px 18px -4px rgba(0,0,0,.2); }
+
+/* ══════════════════════════════════════════════════════════════
+   LOGO UPLOAD ZONE
+   ══════════════════════════════════════════════════════════════ */
 .logo-zone {
-  border: 2px dashed rgba(99, 102, 241, 0.3);
-  border-radius: 0.875rem;
-  padding: 1.5rem;
-  text-align: center;
-  cursor: pointer;
-  background: rgba(99, 102, 241, 0.04);
-  transition: all 0.25s ease;
+  border: 2px dashed rgba(99,102,241,.3);
+  border-radius: .875rem; padding: 1.5rem; text-align: center;
+  cursor: pointer; background: rgba(99,102,241,.04);
+  transition: border-color .25s, background .25s, transform .2s var(--ease-spring), box-shadow .2s;
 }
 .logo-zone:hover {
-  border-color: rgba(99, 102, 241, 0.6);
-  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99,102,241,.6);
+  background: rgba(99,102,241,.08);
+  transform: scale(1.01);
+  box-shadow: 0 4px 16px -4px var(--indigo-glow);
 }
+.logo-zone:active { transform: scale(.99); }
 .logo-zone.has-file {
-  border-style: solid;
-  border-color: #6366f1;
-  background: rgba(99, 102, 241, 0.1);
+  border-style: solid; border-color: #6366f1;
+  background: rgba(99,102,241,.1);
+  box-shadow: 0 2px 12px -4px var(--indigo-glow);
 }
+.logo-zone .fa-cloud-arrow-up { transition: transform .3s var(--ease-spring); }
+.logo-zone:hover .fa-cloud-arrow-up { transform: translateY(-4px) scale(1.1); }
 
-/* ── Mobile sidebar overlay ── */
-#sb-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 40;
+/* Logo preview */
+#logoPreviewImg {
+  transition: transform .25s var(--ease-spring), box-shadow .25s;
 }
-#sb-overlay.show {
-  display: block;
-}
+#logoPreviewImg:hover { transform: scale(1.05); box-shadow: 0 6px 18px -4px rgba(99,102,241,.3); }
 
-/* ── Input field base ── */
+/* ══════════════════════════════════════════════════════════════
+   FORM INPUTS
+   ══════════════════════════════════════════════════════════════ */
 .field {
-  width: 100%;
-  padding: 0.625rem 1rem 0.625rem 2.75rem;
-  border-radius: 0.75rem;
-  font-size: 0.875rem;
-  outline: none;
-  border: 1.5px solid;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  width: 100%; padding: .625rem 1rem .625rem 2.75rem;
+  border-radius: .75rem; font-size: .875rem; outline: none; border: 1.5px solid;
+  transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .field:focus {
   border-color: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.12);
+  box-shadow: 0 0 0 3px var(--brand-glow);
 }
-
-/* ── Read-only field ── */
 .field-ro {
-  cursor: not-allowed;
-  opacity: 0.7;
+  cursor: not-allowed; opacity: .7;
+}
+input[type="file"] { display: none; }
+
+/* Phone field focus — same brand green */
+input[name="phone"]:focus { box-shadow: 0 0 0 3px var(--brand-glow); }
+
+/* ══════════════════════════════════════════════════════════════
+   BUTTONS — Save / Reset / Upload
+   ══════════════════════════════════════════════════════════════ */
+
+/* Brand submit (Save Changes) */
+button[name="update_settings"],
+button[name="update_logo"] {
+  position: relative; overflow: hidden;
+  transition: background .2s, transform .2s var(--ease-spring), box-shadow .25s;
+}
+button[name="update_settings"]::after,
+button[name="update_logo"]::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%);
+  background-size: 200% 100%; opacity: 0; transition: opacity .2s;
+}
+button[name="update_settings"]:hover::after,
+button[name="update_logo"]:hover::after { opacity: 1; animation: shimmer .7s linear; }
+button[name="update_settings"]:hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 6px 16px -4px var(--brand-glow);
+}
+button[name="update_logo"]:hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 6px 16px -4px var(--indigo-glow);
+}
+button[name="update_settings"]:active,
+button[name="update_logo"]:active { transform: scale(.96); }
+
+/* Reset button */
+button[type="reset"],
+button[onclick*="resetPhotoPreview"],
+button[onclick*="resetLogoPreview"] {
+  transition: background .2s, color .2s, border-color .2s, transform .2s var(--ease-spring);
+}
+button[type="reset"]:hover,
+button[onclick*="resetPhotoPreview"]:hover,
+button[onclick*="resetLogoPreview"]:hover { transform: translateY(-1px); }
+
+/* Icon in reset rotates on hover */
+button[type="reset"]:hover .fa-rotate-left,
+button[onclick*="resetPhotoPreview"]:hover .fa-rotate-left,
+button[onclick*="resetLogoPreview"]:hover .fa-rotate-left {
+  animation: spinOnce .4s var(--ease-spring);
 }
 
-/* ── Password strength bar ── */
-.pw-bar {
-  height: 100%;
-  border-radius: 99px;
-  transition:
-    width 0.35s,
-    background 0.35s;
+/* ══════════════════════════════════════════════════════════════
+   PASSWORD SECTION
+   ══════════════════════════════════════════════════════════════ */
+
+/* Eye-toggle buttons */
+button[onclick*="togglePw"] {
+  transition: color .2s, transform .2s var(--ease-spring);
+}
+button[onclick*="togglePw"]:hover { transform: scale(1.15); }
+
+/* Strength bar */
+.pw-bar { height: 100%; border-radius: 99px; transition: width .35s var(--ease-smooth), background .35s; }
+
+/* Strength bar shimmer when strong */
+.pw-bar[style*="width:100%"] {
+  background: linear-gradient(90deg, #22c55e, #4ade80, #22c55e);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
 }
 
-/* ── Password requirement item ── */
+/* Requirement items */
 .req-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.7rem;
-  transition: color 0.2s;
+  display: flex; align-items: center; gap: .5rem; font-size: .7rem;
+  transition: color .2s, transform .15s var(--ease-spring);
+}
+.req-item.ok {
+  color: #16a34a;
+  animation: bounceIn .3s var(--ease-spring);
+}
+.dark .req-item.ok { color: #4ade80; }
+
+/* Submit password button */
+#pwSubmitBtn {
+  position: relative; overflow: hidden;
+  transition: background .2s, transform .2s var(--ease-spring), box-shadow .25s, opacity .2s;
+}
+#pwSubmitBtn::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.15) 50%, transparent 70%);
+  background-size: 200% 100%; opacity: 0; transition: opacity .2s;
+}
+#pwSubmitBtn:not(:disabled):hover::after { opacity: 1; animation: shimmer .7s linear; }
+#pwSubmitBtn:not(:disabled):hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 6px 16px -4px rgba(239,68,68,.4);
+}
+#pwSubmitBtn:not(:disabled):active { transform: scale(.96); }
+#pwSubmitBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Clear button */
+button[type="reset"][onclick*="resetPwForm"] {
+  transition: background .2s, color .2s, transform .2s var(--ease-spring);
+}
+button[type="reset"][onclick*="resetPwForm"]:hover { transform: translateY(-1px); }
+
+/* Password match text */
+#matchText {
+  transition: opacity .2s, color .2s;
 }
 
-/* ── Hide native file input ── */
-input[type="file"] {
-  display: none;
+/* ══════════════════════════════════════════════════════════════
+   ALERT BANNER
+   ══════════════════════════════════════════════════════════════ */
+div[class*="bg-brand-50"],
+div[class*="bg-red-50"] {
+  animation: fadeUp .4s var(--ease-spring) both;
+}
+div[class*="bg-brand-50"] .fa-circle-check { animation: bounceIn .4s var(--ease-spring) .15s both; }
+div[class*="bg-red-50"] .fa-circle-exclamation { animation: floatY 1s ease infinite; }
+
+/* Alert dismiss button */
+div[class*="bg-brand-50"] button[onclick*="remove"],
+div[class*="bg-red-50"] button[onclick*="remove"] {
+  transition: opacity .2s, transform .2s var(--ease-spring);
+}
+div[class*="bg-brand-50"] button[onclick*="remove"]:hover,
+div[class*="bg-red-50"] button[onclick*="remove"]:hover { opacity: 1; transform: scale(1.2) rotate(90deg); }
+
+/* ══════════════════════════════════════════════════════════════
+   SCROLL TO TOP
+   ══════════════════════════════════════════════════════════════ */
+button[onclick*="scrollTo"] {
+  transition: background .2s, color .2s, transform .25s var(--ease-spring), box-shadow .2s, border-color .2s;
+}
+button[onclick*="scrollTo"]:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 8px 20px -4px var(--brand-glow);
+}
+button[onclick*="scrollTo"]:active { transform: scale(.93); }
+button[onclick*="scrollTo"]:hover .fa-chevron-up { animation: floatY .4s var(--ease-spring); }
+
+/* ── Reduced motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }

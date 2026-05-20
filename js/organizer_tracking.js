@@ -56,12 +56,6 @@ function closeSidebar() { sidebar.classList.add('-translate-x-full');    sbOverl
 // SEARCH + FILTER
 // ═══════════════════════════════════════════════════════════════
 
-function syncSearch(val) {
-    document.getElementById('headerSearch').value = val;
-    document.getElementById('pageSearch').value   = val;
-    filterTable();
-}
-
 function filterTable() {
     var q      = (document.getElementById('pageSearch').value   || '').toUpperCase().trim();
     var status = (document.getElementById('statusFilter').value || '').toLowerCase();

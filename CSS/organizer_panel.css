@@ -1,140 +1,620 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   organizer_panel.css
-   Extracted from organizer_panel.php — do NOT modify the original PHP file.
+   organizer_panel.css  — Enhanced Edition
+   Richer micro-interactions · Polished states · Fluid transitions
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+/* ── Custom Properties ────────────────────────────────────────────────────── */
+:root {
+  --brand:        #22c55e;
+  --brand-mid:    #16a34a;
+  --brand-light:  rgba(34, 197, 94, 0.12);
+  --brand-glow:   rgba(34, 197, 94, 0.25);
+  --shadow-card:  0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-lift:  0 20px 40px -10px rgba(0,0,0,.13);
+  --shadow-glow:  0 0 0 3px var(--brand-glow);
+  --ease-spring:  cubic-bezier(.34,1.56,.64,1);
+  --ease-smooth:  cubic-bezier(.4,0,.2,1);
+  --ease-out:     cubic-bezier(0,0,.2,1);
+  --radius-card:  1rem;
+  --transition:   200ms var(--ease-smooth);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 99px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #374151;
+.dark {
+  --brand-light:  rgba(34, 197, 94, 0.15);
+  --brand-glow:   rgba(74, 222, 128, 0.2);
+  --shadow-card:  0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+  --shadow-lift:  0 20px 40px -10px rgba(0,0,0,.5);
 }
 
-/* ── Entrance animations ── */
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 99px; transition: background var(--transition); }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.dark ::-webkit-scrollbar-thumb       { background: #374151; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* ── Base Focus Ring ──────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ENTRANCE ANIMATIONS
+   ══════════════════════════════════════════════════════════════════════════════ */
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
-.anim-up {
-  animation: fadeUp 0.45s ease both;
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(.92); }
+  to   { opacity: 1; transform: scale(1); }
 }
-.anim-left {
-  animation: fadeLeft 0.4s ease both;
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
-
-/* ── Stagger delay helpers ── */
-.d-0 {
-  animation-delay: 0ms;
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0   var(--brand-glow); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: 0 0 0 0   transparent; }
 }
-.d-1 {
-  animation-delay: 80ms;
+@keyframes spin-once {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
-.d-2 {
-  animation-delay: 160ms;
+@keyframes bounce-in {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  80%  { transform: scale(.95); }
+  100% { transform: scale(1); opacity: 1; }
 }
-.d-3 {
-  animation-delay: 240ms;
-}
-.d-4 {
-  animation-delay: 320ms;
-}
-.d-5 {
-  animation-delay: 400ms;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
 }
 
-/* ── Sidebar nav-link (active left-border) ── */
+.anim-up   { animation: fadeUp   0.45s var(--ease-out) both; }
+.anim-left { animation: fadeLeft 0.40s var(--ease-out) both; }
+.anim-in   { animation: scaleIn  0.35s var(--ease-spring) both; }
+
+/* Stagger delays */
+.d-0 { animation-delay:   0ms; }
+.d-1 { animation-delay:  80ms; }
+.d-2 { animation-delay: 160ms; }
+.d-3 { animation-delay: 240ms; }
+.d-4 { animation-delay: 320ms; }
+.d-5 { animation-delay: 400ms; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Nav Link ------------------------------------------------------------------ */
 .nav-link {
   position: relative;
   transition:
-    background 0.2s,
-    color 0.2s;
+    background   var(--transition),
+    color        var(--transition),
+    padding-left var(--transition);
 }
+
+/* Left accent bar */
 .nav-link::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 20%;
-  bottom: 20%;
+  left: 0; top: 15%; bottom: 15%;
   width: 3px;
   border-radius: 0 4px 4px 0;
-  background: #22c55e;
+  background: var(--brand);
   transform: scaleY(0);
-  transition: transform 0.25s;
+  transition: transform 0.28s var(--ease-spring);
+  transform-origin: center;
 }
 .nav-link:hover::before,
-.nav-link.active::before {
-  transform: scaleY(1);
+.nav-link.active::before { transform: scaleY(1); }
+
+/* Hover ripple background */
+.nav-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--brand-light);
+  opacity: 0;
+  transition: opacity var(--transition);
 }
+.nav-link:hover::after  { opacity: .6; }
+.nav-link.active::after { opacity: 1; }
+
+/* Active state */
 .nav-link.active {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
+  background: var(--brand-light);
+  color: var(--brand-mid);
+  font-weight: 600;
 }
-.dark .nav-link.active {
-  color: #4ade80;
-  background: rgba(34, 197, 94, 0.15);
+.dark .nav-link.active { color: #4ade80; background: var(--brand-light); }
+
+/* Icon inside nav link */
+.nav-link .icon-wrap {
+  transition:
+    transform    0.3s var(--ease-spring),
+    background   var(--transition),
+    box-shadow   var(--transition);
+  position: relative;
+  z-index: 1;
+}
+.nav-link:hover .icon-wrap {
+  transform: scale(1.15) rotate(-3deg);
+  box-shadow: 0 4px 10px -2px var(--brand-glow);
+}
+.nav-link.active .icon-wrap {
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px -2px var(--brand-glow);
 }
 
-/* ── Card lift ── */
+/* Active nav badge counts */
+.nav-link span[class*="text-xs"][class*="rounded-full"] {
+  transition: transform 0.2s var(--ease-spring), opacity 0.2s;
+}
+.nav-link:hover span[class*="text-xs"][class*="rounded-full"] {
+  transform: scale(1.15);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
 .card-hover {
   transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
+    transform    0.28s var(--ease-spring),
+    box-shadow   0.28s var(--ease-smooth),
+    border-color 0.2s;
+  box-shadow: var(--shadow-card);
+  will-change: transform;
 }
 .card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.12);
+  transform: translateY(-5px) scale(1.005);
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(34, 197, 94, .2) !important;
 }
 .dark .card-hover:hover {
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-lift);
+  border-color: rgba(74, 222, 128, .18) !important;
 }
 
-/* ── Icon pulse on hover ── */
+/* Stat card top accent shimmer on hover */
+.card-hover .h-1\.5,
+.card-hover .h-2 {
+  transition: opacity 0.2s;
+}
+.card-hover:hover .h-1\.5 { opacity: 1; }
+
+/* Icon wrap — base */
 .icon-wrap {
-  transition: transform 0.25s ease;
-}
-.card-hover:hover .icon-wrap {
-  transform: scale(1.12) rotate(4deg);
+  transition:
+    transform  0.3s var(--ease-spring),
+    box-shadow 0.3s var(--ease-smooth),
+    filter     0.2s;
+  flex-shrink: 0;
 }
 
-/* ── Mobile sidebar overlay ── */
+/* Stat card icon bounce on card hover */
+.card-hover:hover .icon-wrap {
+  transform: scale(1.18) rotate(6deg);
+  box-shadow: 0 6px 14px -4px var(--brand-glow);
+  filter: brightness(1.08);
+}
+
+/* Live badge pulse */
+span:has(.fa-arrow-trend-up) {
+  animation: pulse-ring 2.5s ease infinite;
+}
+
+/* ── Progress bars ─────────────────────────────────────────────────────────── */
+.card-hover .h-1\.5 > div,
+.card-hover .h-2 > div {
+  transition: width 0.8s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+.card-hover .h-1\.5 > div::after,
+.card-hover .h-2 > div::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255,255,255,.35) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HEADER
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Search Input */
+#searchInput {
+  transition:
+    border-color  var(--transition),
+    box-shadow    var(--transition),
+    background    var(--transition);
+}
+#searchInput:focus {
+  box-shadow: var(--shadow-glow);
+}
+
+/* Theme toggle */
+button:has(#themeIcon) {
+  transition:
+    background  var(--transition),
+    transform   0.3s var(--ease-spring),
+    box-shadow  var(--transition);
+}
+button:has(#themeIcon):hover {
+  transform: rotate(20deg) scale(1.1);
+  box-shadow: 0 0 12px var(--brand-glow);
+}
+button:has(#themeIcon):active { transform: rotate(20deg) scale(.95); }
+
+/* Bell button */
+button:has(.fa-bell) {
+  transition: background var(--transition), transform 0.25s var(--ease-spring);
+}
+button:has(.fa-bell):hover { transform: scale(1.1); }
+button:has(.fa-bell):active { transform: scale(.93); }
+button:has(.fa-bell):hover .fa-bell {
+  animation: float 0.6s var(--ease-spring);
+}
+
+/* Profile avatar */
+div[class*="rounded-full"][class*="ring-2"] {
+  transition:
+    transform  0.25s var(--ease-spring),
+    box-shadow 0.25s var(--ease-smooth);
+}
+div[class*="rounded-full"][class*="ring-2"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--brand-glow), 0 6px 16px -4px rgba(34,197,94,.3);
+}
+
+/* ── Notification Panel ───────────────────────────────────────────────────── */
+#notifPanel {
+  transform-origin: top right;
+  transition:
+    opacity   0.2s var(--ease-out),
+    transform 0.25s var(--ease-spring);
+}
+#notifPanel.hidden {
+  opacity: 0;
+  transform: scale(.94) translateY(-6px);
+  pointer-events: none;
+}
+#notifPanel:not(.hidden) {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  animation: scaleIn 0.22s var(--ease-spring) both;
+}
+
+/* Notification items */
+#notifPanel .hover\:bg-gray-50:hover {
+  padding-left: 1.25rem;
+  transition: background var(--transition), padding-left 0.2s var(--ease-out);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   BUTTONS  (global interactive polish)
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Generic button base */
+button,
+a[class*="px-"][class*="py-"][class*="rounded"] {
+  transition:
+    background   var(--transition),
+    color        var(--transition),
+    border-color var(--transition),
+    transform    0.18s var(--ease-spring),
+    box-shadow   0.2s var(--ease-smooth);
+}
+
+/* Active press */
+button:active,
+a[class*="active\:scale-95"]:active {
+  transform: scale(.95) !important;
+}
+
+/* Post Announcement button (rose) */
+button[onclick="openAnnModal()"],
+button[type="submit"] {
+  position: relative;
+  overflow: hidden;
+}
+button[onclick="openAnnModal()"]::after,
+button[type="submit"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.18) 50%, transparent 70%);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+button[onclick="openAnnModal()"]:hover::after,
+button[type="submit"]:hover::after {
+  opacity: 1;
+  animation: shimmer 0.7s linear;
+}
+button[onclick="openAnnModal()"]:hover,
+button[type="submit"]:hover {
+  box-shadow: 0 6px 16px -4px rgba(244,63,94,.4);
+  transform: translateY(-1px) scale(1.01);
+}
+
+/* Event detail / QR buttons */
+a[href*="organizer_event.php?id"],
+a[href*="organizer_qrscan.php?event"] {
+  transition:
+    background   var(--transition),
+    color        var(--transition),
+    border-color var(--transition),
+    transform    0.2s var(--ease-spring),
+    box-shadow   0.2s var(--ease-smooth);
+}
+a[href*="organizer_qrscan.php?event"]:hover {
+  box-shadow: 0 4px 12px -3px var(--brand-glow);
+  transform: translateY(-1px) scale(1.04);
+}
+a[href*="organizer_qrscan.php?event"]:hover .fa-qrcode {
+  animation: spin-once 0.4s var(--ease-spring);
+}
+
+/* Scroll-to-top */
+button[onclick*="scrollTo"] {
+  transition:
+    background  var(--transition),
+    transform   0.25s var(--ease-spring),
+    box-shadow  var(--transition),
+    opacity     var(--transition);
+}
+button[onclick*="scrollTo"]:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 8px 20px -4px var(--brand-glow);
+}
+button[onclick*="scrollTo"]:active { transform: translateY(0) scale(.93); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ANNOUNCEMENT CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
+/* Side accent bar transition */
+.card-hover > div.w-1 {
+  transition: width 0.25s var(--ease-spring);
+}
+.card-hover:hover > div.w-1 { width: 5px; }
+
+/* External link icon */
+a[href*="organizer_announcements.php?id"] {
+  transition: color var(--transition), transform 0.2s var(--ease-spring), opacity var(--transition);
+  opacity: .5;
+}
+a[href*="organizer_announcements.php?id"]:hover {
+  opacity: 1;
+  transform: translate(2px, -2px) scale(1.2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL
+   ══════════════════════════════════════════════════════════════════════════════ */
+#annModal {
+  transition: opacity 0.25s var(--ease-out);
+}
+#annModal.hidden { opacity: 0; }
+#annModal:not(.hidden) { opacity: 1; }
+
+/* Modal card */
+#annModal > div {
+  transition:
+    transform 0.3s var(--ease-spring),
+    opacity   0.3s var(--ease-out);
+}
+#annModal.hidden > div {
+  transform: scale(.94) translateY(16px);
+  opacity: 0;
+}
+#annModal:not(.hidden) > div {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+/* Form inputs inside modal */
+#annModal input[type="text"],
+#annModal textarea {
+  transition:
+    border-color var(--transition),
+    box-shadow   var(--transition),
+    background   var(--transition);
+}
+#annModal input[type="text"]:focus,
+#annModal textarea:focus {
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, .2);
+}
+
+/* Checkbox */
+#annModal input[type="checkbox"] {
+  transition: transform 0.2s var(--ease-spring), box-shadow var(--transition);
+}
+#annModal input[type="checkbox"]:checked {
+  animation: bounce-in 0.35s var(--ease-spring);
+}
+#annModal input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, .3);
+}
+
+/* Close button */
+#annModal button[onclick="closeAnnModal()"] {
+  transition:
+    background  var(--transition),
+    color       var(--transition),
+    transform   0.2s var(--ease-spring);
+}
+#annModal button[onclick="closeAnnModal()"]:hover {
+  transform: rotate(90deg) scale(1.1);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ACTIVITY FEED ITEMS
+   ══════════════════════════════════════════════════════════════════════════════ */
+.anim-left > span.rounded-full {
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.25s;
+}
+.anim-left:hover > span.rounded-full {
+  transform: scale(1.18) rotate(-5deg);
+  box-shadow: 0 4px 10px -2px var(--brand-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FLASH MESSAGES
+   ══════════════════════════════════════════════════════════════════════════════ */
+div[class*="bg-emerald-50"],
+div[class*="bg-red-50"] {
+  animation: fadeUp 0.4s var(--ease-spring) both;
+}
+div[class*="bg-emerald-50"] .fa-circle-check {
+  animation: bounce-in 0.4s var(--ease-spring) 0.2s both;
+}
+div[class*="bg-red-50"] .fa-circle-exclamation {
+  animation: float 1s ease infinite;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SECTION HEADER LINKS  ("View all →")
+   ══════════════════════════════════════════════════════════════════════════════ */
+a[class*="hover:underline"][class*="group"] {
+  transition: color var(--transition), gap var(--transition);
+}
+a[class*="hover:underline"][class*="group"]:hover {
+  letter-spacing: .01em;
+}
+a[class*="hover:underline"][class*="group"] .fa-arrow-right {
+  transition: transform 0.25s var(--ease-spring);
+}
+a[class*="hover:underline"][class*="group"]:hover .fa-arrow-right {
+  transform: translateX(4px);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIDEBAR FOOTER LINKS  (Settings / Logout)
+   ══════════════════════════════════════════════════════════════════════════════ */
+a[href*="organizer_settings.php"],
+a[href*="logout.php"] {
+  transition:
+    background  var(--transition),
+    color       var(--transition),
+    padding-left 0.2s var(--ease-out),
+    transform   0.2s var(--ease-spring);
+}
+a[href*="organizer_settings.php"]:hover { padding-left: 1.1rem; }
+a[href*="logout.php"]:hover {
+  padding-left: 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,.15);
+}
+a[href*="logout.php"]:hover .icon-wrap { animation: spin-once 0.5s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR OVERLAY
+   ══════════════════════════════════════════════════════════════════════════════ */
 #sb-overlay {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(3px);
   z-index: 40;
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-smooth);
 }
 #sb-overlay.show {
   display: block;
+  opacity: 1;
 }
 
-/* ── Chart container ── */
+/* Sidebar slide */
+#sidebar {
+  transition: transform 0.32s var(--ease-spring);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   CHART WRAPPER
+   ══════════════════════════════════════════════════════════════════════════════ */
 .chart-wrap {
   position: relative;
   height: 280px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   STATUS PILLS — subtle glow on hover
+   ══════════════════════════════════════════════════════════════════════════════ */
+span[class*="rounded-full"][class*="text-emerald"] {
+  transition: box-shadow var(--transition);
+}
+span[class*="rounded-full"][class*="text-emerald"]:hover {
+  box-shadow: 0 0 0 3px rgba(16,185,129,.2);
+}
+span[class*="rounded-full"][class*="text-amber"] {
+  transition: box-shadow var(--transition);
+}
+span[class*="rounded-full"][class*="text-amber"]:hover {
+  box-shadow: 0 0 0 3px rgba(245,158,11,.2);
+}
+span[class*="rounded-full"][class*="text-red"] {
+  transition: box-shadow var(--transition);
+}
+span[class*="rounded-full"][class*="text-red"]:hover {
+  box-shadow: 0 0 0 3px rgba(239,68,68,.2);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ORG LOGO IN SIDEBAR — gentle float
+   ══════════════════════════════════════════════════════════════════════════════ */
+aside img[class*="rounded-xl"],
+aside div[class*="rounded-xl"][class*="bg-brand"] {
+  transition: transform 0.3s var(--ease-spring), box-shadow 0.3s;
+}
+aside img[class*="rounded-xl"]:hover,
+aside div[class*="rounded-xl"][class*="bg-brand"]:hover {
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 0 8px 20px -6px var(--brand-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   EMPTY STATE CTAs
+   ══════════════════════════════════════════════════════════════════════════════ */
+a[href*="organizer_event.php"][class*="bg-brand"],
+button[onclick="openAnnModal()"][class*="bg-rose-500"][class*="inline-flex"] {
+  transition:
+    background  var(--transition),
+    transform   0.2s var(--ease-spring),
+    box-shadow  0.25s var(--ease-smooth);
+}
+a[href*="organizer_event.php"][class*="bg-brand"]:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 8px 20px -4px var(--brand-glow);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION FALLBACK
+   ══════════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:   0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration:  0.01ms !important;
+  }
 }

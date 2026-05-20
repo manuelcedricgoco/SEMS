@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+  <title>Chat Icon</title>
+  <rect width="128" height="128" rx="24" fill="#6366f1"/>
+
+  <!-- Main chat bubble -->
+  <rect x="12" y="18" width="88" height="62" rx="12" fill="white" opacity="0.95"/>
+  <!-- Bubble tail -->
+  <polygon points="20,80 12,100 44,80" fill="white" opacity="0.95"/>
+
+  <!-- Message lines -->
+  <rect x="26" y="34" width="60" height="6" rx="3" fill="#c7d2fe"/>
+  <rect x="26" y="46" width="48" height="6" rx="3" fill="#c7d2fe"/>
+  <rect x="26" y="58" width="54" height="6" rx="3" fill="#c7d2fe"/>
+
+  <!-- Secondary reply bubble -->
+  <rect x="50" y="72" width="66" height="42" rx="12" fill="#4f46e5"/>
+  <!-- Reply tail right -->
+  <polygon points="106,114 116,114 116,96" fill="#4f46e5"/>
+
+  <!-- Reply lines -->
+  <rect x="60" y="84" width="46" height="5" rx="2.5" fill="white" opacity="0.85"/>
+  <rect x="60" y="95" width="34" height="5" rx="2.5" fill="white" opacity="0.55"/>
+
+  <!-- Typing dots on reply bubble -->
+  <circle cx="60" cy="107" r="3" fill="white" opacity="0.9"/>
+  <circle cx="70" cy="107" r="3" fill="white" opacity="0.6"/>
+  <circle cx="80" cy="107" r="3" fill="white" opacity="0.3"/>
+</svg>

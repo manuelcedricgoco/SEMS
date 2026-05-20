@@ -1,151 +1,260 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   organizer_tracking.css
-   Extracted from organizer_tracking.php — do NOT modify the original PHP file.
+   organizer_tracking.css  — Enhanced Edition + Full Responsiveness
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+/* ── Custom Properties ────────────────────────────────────────────────────── */
+:root {
+  --brand:       #22c55e;
+  --brand-mid:   #16a34a;
+  --brand-light: rgba(34,197,94,.12);
+  --brand-glow:  rgba(34,197,94,.25);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.07), 0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.13);
+  --ease-spring: cubic-bezier(.34,1.56,.64,1);
+  --ease-smooth: cubic-bezier(.4,0,.2,1);
+  --ease-out:    cubic-bezier(0,0,.2,1);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 99px;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #374151;
+.dark {
+  --brand-light: rgba(34,197,94,.15);
+  --brand-glow:  rgba(74,222,128,.2);
+  --shadow-card: 0 4px 6px -1px rgba(0,0,0,.3), 0 2px 4px -2px rgba(0,0,0,.2);
+  --shadow-lift: 0 20px 40px -10px rgba(0,0,0,.5);
 }
 
-/* ── Entrance animation ── */
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: #d1d5db; border-radius: 99px; transition: background .2s; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+.dark ::-webkit-scrollbar-thumb       { background: #374151; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+
+/* ── Base focus ring ──────────────────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ENTRANCE ANIMATIONS
+   ══════════════════════════════════════════════════════════════════════════════ */
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.anim-up {
-  animation: fadeUp 0.45s ease both;
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(.93); }
+  to   { opacity: 1; transform: scale(1); }
 }
-.d-0 {
-  animation-delay: 0ms;
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
 }
-.d-1 {
-  animation-delay: 70ms;
+@keyframes spinOnce {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
-.d-2 {
-  animation-delay: 140ms;
+@keyframes bounceIn {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  80%  { transform: scale(.95); }
+  100% { transform: scale(1); opacity: 1; }
 }
-.d-3 {
-  animation-delay: 210ms;
+@keyframes floatY {
+  0%,100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(.96) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0); }
 }
 
-/* ── Sidebar nav-link (active left-border) ── */
+.anim-up { animation: fadeUp 0.45s var(--ease-out) both; }
+.d-0 { animation-delay:   0ms; }
+.d-1 { animation-delay:  70ms; }
+.d-2 { animation-delay: 140ms; }
+.d-3 { animation-delay: 210ms; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   SIDEBAR
+   ══════════════════════════════════════════════════════════════════════════════ */
 .nav-link {
   position: relative;
-  transition:
-    background 0.2s,
-    color 0.2s;
+  transition: background .2s var(--ease-smooth), color .2s;
 }
 .nav-link::before {
   content: "";
   position: absolute;
-  left: 0;
-  top: 20%;
-  bottom: 20%;
+  left: 0; top: 15%; bottom: 15%;
   width: 3px;
   border-radius: 0 4px 4px 0;
-  background: #22c55e;
+  background: var(--brand);
   transform: scaleY(0);
-  transition: transform 0.25s;
+  transition: transform .28s var(--ease-spring);
+  transform-origin: center;
 }
-.nav-link:hover::before,
-.nav-link.active::before {
-  transform: scaleY(1);
+.nav-link::after {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  background: var(--brand-light);
+  opacity: 0;
+  transition: opacity .2s;
 }
-.nav-link.active {
-  background: rgba(34, 197, 94, 0.12);
-  color: #16a34a;
-}
-.dark .nav-link.active {
-  color: #4ade80;
-  background: rgba(34, 197, 94, 0.15);
-}
+.nav-link:hover::before, .nav-link.active::before { transform: scaleY(1); }
+.nav-link:hover::after  { opacity: .6; }
+.nav-link.active::after { opacity: 1; }
 
-/* ── Card hover ── */
+.nav-link.active { background: var(--brand-light); color: var(--brand-mid); font-weight: 600; }
+.dark .nav-link.active { color: #4ade80; background: var(--brand-light); }
+
+.nav-link .icon-wrap {
+  transition: transform .3s var(--ease-spring), box-shadow .3s;
+  position: relative; z-index: 1;
+}
+.nav-link:hover .icon-wrap  { transform: scale(1.15) rotate(-3deg); box-shadow: 0 4px 10px -2px var(--brand-glow); }
+.nav-link.active .icon-wrap { transform: scale(1.08); }
+
+/* Sidebar footer links */
+a[href*="organizer_settings.php"],
+a[href*="logout.php"] {
+  transition: background .2s, color .2s, padding-left .2s var(--ease-out);
+}
+a[href*="organizer_settings.php"]:hover { padding-left: 1.1rem; }
+a[href*="logout.php"]:hover {
+  padding-left: 1.1rem;
+  box-shadow: inset 0 0 0 1px rgba(239,68,68,.15);
+}
+a[href*="logout.php"]:hover .icon-wrap { animation: spinOnce .5s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   STAT MINI-CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
 .card-hover {
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
+  transition: transform .28s var(--ease-spring), box-shadow .28s var(--ease-smooth), border-color .2s;
+  box-shadow: var(--shadow-card);
+  will-change: transform;
 }
 .card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.1);
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: var(--shadow-lift);
 }
-.dark .card-hover:hover {
-  box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.4);
-}
+.dark .card-hover:hover { box-shadow: var(--shadow-lift); }
 
-/* ── Icon animate ── */
 .icon-wrap {
-  transition: transform 0.25s ease;
+  transition: transform .3s var(--ease-spring), box-shadow .3s, filter .2s;
+  flex-shrink: 0;
 }
 .card-hover:hover .icon-wrap {
-  transform: scale(1.1) rotate(4deg);
+  transform: scale(1.18) rotate(6deg);
+  box-shadow: 0 6px 14px -4px var(--brand-glow);
+  filter: brightness(1.08);
 }
 
-/* ── Table row hover ── */
+/* Stat number counter effect */
+.card-hover p[class*="text-2xl"] {
+  transition: transform .2s var(--ease-spring);
+}
+.card-hover:hover p[class*="text-2xl"] { transform: scale(1.05); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   FILTER BAR — Search & Select
+   ══════════════════════════════════════════════════════════════════════════════ */
+#pageSearch, #statusFilter {
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+#pageSearch:focus    { box-shadow: 0 0 0 3px var(--brand-glow); }
+#statusFilter:focus  { box-shadow: 0 0 0 3px var(--brand-glow); }
+
+/* Header theme button */
+button:has(#themeIcon) {
+  transition: background .2s, transform .3s var(--ease-spring), box-shadow .2s;
+}
+button:has(#themeIcon):hover  { transform: rotate(20deg) scale(1.1); box-shadow: 0 0 12px var(--brand-glow); }
+button:has(#themeIcon):active { transform: rotate(20deg) scale(.95); }
+
+/* Export CSV button */
+button[onclick*="exportToCSV"] {
+  transition: background .2s, color .2s, transform .2s var(--ease-spring), box-shadow .2s;
+}
+button[onclick*="exportToCSV"]:hover {
+  transform: translateY(-1px) scale(1.02);
+  box-shadow: 0 4px 12px -3px var(--brand-glow);
+}
+button[onclick*="exportToCSV"]:active { transform: scale(.96); }
+button[onclick*="exportToCSV"]:hover .fa-file-export { animation: floatY .5s var(--ease-spring); }
+
+/* Profile avatar */
+div[class*="rounded-full"][class*="ring-2"] {
+  transition: transform .25s var(--ease-spring), box-shadow .25s;
+}
+div[class*="rounded-full"][class*="ring-2"]:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--brand-glow), 0 6px 16px -4px rgba(34,197,94,.3);
+}
+
+/* Live record chip pulse dot */
+span[class*="animate-pulse"] { animation: floatY 1.4s ease infinite; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   TABLE
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Row entrance */
 .row-hover {
-  transition: background 0.18s ease;
+  animation: rowSlideIn .35s var(--ease-out) both;
+  transition: background .18s var(--ease-smooth), transform .18s;
 }
 .row-hover:hover {
-  background: rgba(34, 197, 94, 0.04);
+  background: rgba(34,197,94,.04);
+  transform: translateX(2px);
 }
-.dark .row-hover:hover {
-  background: rgba(34, 197, 94, 0.07);
+.dark .row-hover:hover { background: rgba(34,197,94,.07); }
+
+/* Event title in row */
+.row-hover td:first-child span { transition: color .2s; }
+.row-hover:hover td:first-child span { color: var(--brand-mid); }
+.dark .row-hover:hover td:first-child span { color: #4ade80; }
+
+/* Avatar ring — lift on row hover */
+.avatar-ring {
+  outline: 2px solid #fff;
+  outline-offset: 0;
+  box-shadow: 0 0 2px #fff, 0 0 3px #e5e7eb;
+  transition: transform .25s var(--ease-spring), box-shadow .25s;
+}
+.dark .avatar-ring {
+  box-shadow: 0 0 0 2px #1f2937, 0 0 0 3px #374151;
+}
+.row-hover:hover .avatar-ring {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px var(--brand-glow), 0 4px 10px -2px rgba(34,197,94,.3);
+}
+.dark .row-hover:hover .avatar-ring {
+  box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
-/* ── Modal pop animation ── */
-@keyframes modalPop {
-  from {
-    opacity: 0;
-    transform: scale(0.96) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
-}
-.modal-pop {
-  animation: modalPop 0.25s ease both;
-}
+/* Status pill hover glow */
+.row-hover span[class*="rounded-full"][class*="text-brand"] { transition: box-shadow .2s; }
+.row-hover:hover span[class*="rounded-full"][class*="text-brand"] { box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+.row-hover span[class*="rounded-full"][class*="text-amber"] { transition: box-shadow .2s; }
+.row-hover:hover span[class*="rounded-full"][class*="text-amber"] { box-shadow: 0 0 0 3px rgba(245,158,11,.2); }
+.row-hover span[class*="rounded-full"][class*="text-red"]   { transition: box-shadow .2s; }
+.row-hover:hover span[class*="rounded-full"][class*="text-red"]   { box-shadow: 0 0 0 3px rgba(239,68,68,.2); }
 
-/* ── Mobile sidebar overlay ── */
-#sb-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 40;
-}
-#sb-overlay.show {
-  display: block;
-}
-
-/* ── QR value badge pill ── */
+/* QR pill */
 .qr-pill {
   font-family: "Courier New", monospace;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  background: rgba(139, 92, 246, 0.08);
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  letter-spacing: .04em;
+  background: rgba(139,92,246,.08);
+  border: 1px solid rgba(139,92,246,.2);
   color: #7c3aed;
   border-radius: 6px;
   padding: 2px 7px;
@@ -154,38 +263,193 @@
   overflow: hidden;
   text-overflow: ellipsis;
   display: inline-block;
+  transition: background .2s, border-color .2s, box-shadow .2s;
 }
 .dark .qr-pill {
-  background: rgba(139, 92, 246, 0.12);
-  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139,92,246,.12);
+  border-color: rgba(139,92,246,.3);
   color: #a78bfa;
 }
-
-/* ── Avatar ring ── */
-.avatar-ring {
-  outline: 2px solid #fff;
-  outline-offset: 0;
-  box-shadow:
-    0 0 2px #fff,
-    0 0 3px #e5e7eb;
-}
-.dark .avatar-ring {
-  box-shadow:
-    0 0 0 2px #1f2937,
-    0 0 0 3px #374151;
+.qr-pill:hover {
+  background: rgba(139,92,246,.16);
+  border-color: rgba(139,92,246,.4);
+  box-shadow: 0 0 0 3px rgba(139,92,246,.15);
 }
 
-/* ── Responsive column visibility ── */
+/* Copy QR button */
+button[onclick*="copyQR"] {
+  transition: color .2s, background .2s, transform .2s var(--ease-spring), box-shadow .2s;
+}
+button[onclick*="copyQR"]:hover {
+  transform: scale(1.2);
+  box-shadow: 0 2px 8px -2px rgba(139,92,246,.3);
+}
+button[onclick*="copyQR"]:active { transform: scale(.9); }
+
+/* Cancel reg (trash) button */
+.delete-trigger {
+  transition: background .2s, color .2s, border-color .2s, transform .2s var(--ease-spring), box-shadow .2s;
+}
+.delete-trigger:hover {
+  transform: scale(1.12) rotate(-5deg);
+  box-shadow: 0 4px 10px -2px rgba(239,68,68,.35);
+}
+.delete-trigger:active { transform: scale(.93); }
+
+/* Pagination links */
+a[href*="?page="] {
+  transition: background .2s, color .2s, transform .18s var(--ease-spring), box-shadow .2s;
+}
+a[href*="?page="]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px -2px var(--brand-glow);
+}
+a[href*="?page="]:active { transform: scale(.96); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MOBILE REGISTRATION CARDS
+   ══════════════════════════════════════════════════════════════════════════════ */
+.reg-card {
+  animation: cardSlideIn .35s var(--ease-out) both;
+  transition: background .18s var(--ease-smooth), box-shadow .2s;
+}
+.reg-card:hover {
+  background: rgba(34,197,94,.03);
+}
+.dark .reg-card:hover { background: rgba(34,197,94,.06); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   DELETE CONFIRMATION MODAL
+   ══════════════════════════════════════════════════════════════════════════════ */
+.modal-pop { animation: modalPop .28s var(--ease-spring) both; }
+
+#deleteModal {
+  transition: opacity .25s var(--ease-out);
+}
+
+/* Modal close button */
+button[onclick*="closeDeleteModal"]:hover {
+  transform: rotate(90deg) scale(1.1);
+  transition: transform .2s var(--ease-spring);
+}
+
+/* Confirm delete button */
+#confirmDeleteBtn {
+  transition: background .2s, transform .2s var(--ease-spring), box-shadow .25s;
+  position: relative; overflow: hidden;
+}
+#confirmDeleteBtn::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,.15) 50%, transparent 70%);
+  background-size: 200% 100%; opacity: 0; transition: opacity .2s;
+}
+#confirmDeleteBtn:hover::after { opacity: 1; animation: shimmer .6s linear; }
+#confirmDeleteBtn:hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 6px 16px -4px rgba(239,68,68,.4);
+}
+#confirmDeleteBtn:active { transform: scale(.96); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   COPY TOAST
+   ══════════════════════════════════════════════════════════════════════════════ */
+#copyToast {
+  transition: opacity .3s var(--ease-smooth), transform .3s var(--ease-spring);
+}
+#copyToast.show {
+  opacity: 1 !important;
+  transform: translateX(-50%) translateY(-4px);
+}
+#copyToast .fa-check-circle { animation: bounceIn .35s var(--ease-spring) .05s both; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   HEADER — scroll to top
+   ══════════════════════════════════════════════════════════════════════════════ */
+button[onclick*="scrollTo"] {
+  transition: background .2s, color .2s, transform .25s var(--ease-spring), box-shadow .2s, border-color .2s;
+}
+button[onclick*="scrollTo"]:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 8px 20px -4px var(--brand-glow);
+}
+button[onclick*="scrollTo"]:active { transform: scale(.93); }
+button[onclick*="scrollTo"]:hover .fa-chevron-up { animation: floatY .4s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MOBILE SIDEBAR OVERLAY
+   ══════════════════════════════════════════════════════════════════════════════ */
+#sb-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(3px);
+  z-index: 40;
+  opacity: 0;
+  transition: opacity .3s var(--ease-smooth);
+}
+#sb-overlay.show { display: block; opacity: 1; }
+#sidebar { transition: transform .32s var(--ease-spring); }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESPONSIVE COLUMN VISIBILITY
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* < 640px — hide Email, QR, Registered */
 @media (max-width: 640px) {
-  .col-email {
-    display: none !important;
-  }
-  .col-qr {
-    display: none !important;
-  }
+  .col-email,
+  .col-qr,
+  .col-registered { display: none !important; }
 }
-@media (max-width: 900px) {
-  .col-qr {
-    display: none !important;
+
+/* 641px – 900px — hide QR */
+@media (min-width: 641px) and (max-width: 900px) {
+  .col-qr { display: none !important; }
+}
+
+/* ── Mobile: show card list, hide table ── */
+@media (max-width: 767px) {
+  .desktop-table-wrap { display: none !important; }
+  .mobile-card-list   { display: block !important; }
+}
+
+/* ── Tablet+: show table, hide card list ── */
+@media (min-width: 768px) {
+  .desktop-table-wrap { display: block !important; }
+  .mobile-card-list   { display: none !important; }
+}
+
+/* ── Stat card strip — allow wrapping on tiny screens ── */
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.stat-strip .card-hover {
+  flex: 1 1 60px;
+  min-width: 60px;
+}
+
+/* ── Section heading row — stack on very small screens ── */
+@media (max-width: 479px) {
+  .section-head { flex-direction: column !important; align-items: flex-start !important; }
+}
+
+/* ── Pagination — scrollable on tiny screens ── */
+.pagination-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.pagination-scroll::-webkit-scrollbar { height: 3px; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ══════════════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
   }
 }

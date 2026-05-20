@@ -771,6 +771,27 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <a href="/organizer/organizer_analytics.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm"><i class="fas fa-chart-line"></i></span>Analytics
             </a>
+
+            <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Communication</p>
+        <a href="/organizer/organizer_chat.php"
+           class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+           aria-current="page">
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-500 dark:text-rose-400 flex items-center justify-center text-sm">
+    <i class="fas fa-comments"></i>
+</span>
+            Messages
+            <span id="sidebarBadge"
+                  class="ml-auto text-[11px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full font-semibold hidden"></span>
+        </a>
+
+        <a href="/organizer/organizer_admin_chat.php"
+                   class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
+                    <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-sm">
+    <i class="fas fa-user-shield"></i>
+</span>
+                    Admin Messages
+                    <span id="adminBadge" class="ml-auto hidden text-[10px] font-bold bg-brand-500 text-white rounded-full px-1.5 py-0.5"></span>
+                </a>
         </nav>
         <div class="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
             <a href="/organizer/organizer_settings.php" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
@@ -1529,9 +1550,9 @@ $totalArchived  = count($archivedEvents) + count($archivedAnnouncements);
             <div class="p-6 space-y-4">
                 <p class="text-sm text-gray-600 dark:text-gray-300">Archive <strong class="text-gray-900 dark:text-white" x-text="'«'+deleteTitle+'»'"></strong>?</p>
                 <div class="flex items-start gap-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 text-xs text-amber-700 dark:text-amber-400">
-                    <i class="fas fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
-                    Existing <strong>registrations will be cleared</strong>. If you restore the event, students will be <strong>auto-registered again</strong> based on the original rules.
-                </div>
+    <i class="fas fa-triangle-exclamation mt-0.5 flex-shrink-0"></i>
+    <span>Existing <strong>registrations will be cleared</strong>. If you restore the event, students will be <strong>auto-registered again</strong> based on the original rules.</span>
+</div>
                 <div class="flex gap-3">
                     <button @click="showDelete=false" class="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">Cancel</button>
                     <form method="POST" class="flex-1">

@@ -306,8 +306,9 @@ foreach ($events as $e) {
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+    
     <div class="sidebar-brand">
-      <div class="brand-logo" aria-hidden="true">
+      <div class="sb-logo-mark" aria-hidden="true">
         <i data-lucide="graduation-cap" style="width:18px;height:18px;color:#fff;"></i>
       </div>
       <div>
@@ -322,11 +323,13 @@ foreach ($events as $e) {
         <i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i>
         Dashboard
       </a>
+
       <div class="nav-group-label">Events</div>
       <a href="student_event.php" class="nav-item">
         <i data-lucide="calendar-days" style="width:15px;height:15px;"></i>
         Browse Events
       </a>
+
       <div class="nav-group-label">Participation</div>
       <a href="student_attendance.php" class="nav-item">
         <i data-lucide="clipboard-list" style="width:15px;height:15px;"></i>
@@ -340,6 +343,16 @@ foreach ($events as $e) {
         <i data-lucide="message-square" style="width:15px;height:15px;"></i>
         Feedback
       </a>
+
+      <!-- ══ FIX: was class="sb-link" — changed to class="nav-item"
+               + added missing "Communication" group label
+               + badge now uses class="sb-badge" like student_chat.php ══ -->
+      <a href="student_chat.php" class="nav-item">
+        <i data-lucide="message-circle" style="width:15px;height:15px;"></i>
+        Messages
+        <span id="sidebarBadge" class="sb-badge" style="display:none;"></span>
+      </a>
+
       <div class="nav-group-label">Account</div>
       <a href="student_settings.php" class="nav-item">
         <i data-lucide="settings" style="width:15px;height:15px;"></i>
@@ -376,9 +389,9 @@ foreach ($events as $e) {
       <i data-lucide="menu" style="width:17px;height:17px;"></i>
     </button>
     <div style="display:flex;align-items:center;gap:.5rem;">
-      <div class="brand-logo" style="width:28px;height:28px;border-radius:7px;">
-        <i data-lucide="graduation-cap" style="width:13px;height:13px;color:#fff;"></i>
-      </div>
+      <div class="sb-logo-mark" style="width:28px;height:28px;border-radius:7px;">
+    <i data-lucide="graduation-cap" style="width:13px;height:13px;color:#fff;"></i>
+</div>
       <span class="brand-name" style="font-size:.9rem;">SEMS</span>
     </div>
     <div class="topbar-spacer"></div>

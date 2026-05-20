@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img">
+  <title>Admin Chat Icon</title>
+  <rect width="128" height="128" rx="24" fill="#6366f1"/>
+
+  <!-- Main chat bubble -->
+  <rect x="10" y="14" width="94" height="64" rx="12" fill="white" opacity="0.95"/>
+  <!-- Bubble tail -->
+  <polygon points="20,78 10,96 42,78" fill="white" opacity="0.95"/>
+
+  <!-- Message lines -->
+  <rect x="24" y="30" width="66" height="6" rx="3" fill="#c7d2fe"/>
+  <rect x="24" y="42" width="50" height="6" rx="3" fill="#c7d2fe"/>
+  <rect x="24" y="54" width="58" height="6" rx="3" fill="#c7d2fe"/>
+
+  <!-- Admin badge ring -->
+  <circle cx="96" cy="88" r="28" fill="#3730a3"/>
+  <circle cx="96" cy="88" r="24" fill="#4f46e5"/>
+
+  <!-- Crown on admin badge -->
+  <polygon points="82,96 82,82 88,88 96,80 104,88 110,82 110,96" fill="white" opacity="0.95"/>
+  <rect x="82" y="94" width="28" height="5" rx="2" fill="white" opacity="0.95"/>
+
+  <!-- Jewel dots on crown -->
+  <circle cx="88" cy="91" r="2" fill="#a5b4fc"/>
+  <circle cx="96" cy="88" r="2" fill="#c7d2fe"/>
+  <circle cx="104" cy="91" r="2" fill="#a5b4fc"/>
+</svg>

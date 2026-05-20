@@ -17,11 +17,12 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FETCH ADMIN PROFILE ──
 // ═══════════════════════════════════════════════════════════════════════════════
-$adminFullName   = 'Admin User';
 $adminFirstName  = 'Admin';
 $adminMiddleName = '';
 $adminLastName   = 'User';
-$adminAvatar     = null;
+$adminFullName   = 'Admin User';
+$adminInitials   = 'A';
+$adminAvatar     = '';
 
 if (isset($_SESSION['user_id'])) {
     $adminStmt = $pdo->prepare("
@@ -32,12 +33,19 @@ if (isset($_SESSION['user_id'])) {
     $adminData = $adminStmt->fetch(PDO::FETCH_ASSOC);
 
     if ($adminData) {
-        $adminFirstName  = htmlspecialchars($adminData['first_name']);
-        $adminMiddleName = htmlspecialchars($adminData['middle_name']);
-        $adminLastName   = htmlspecialchars($adminData['last_name']);
-        $adminFullName   = $adminFirstName . ($adminMiddleName ? ' ' . $adminMiddleName : '') . ' ' . $adminLastName;
-        if ($adminData['profile_image']) {
-            $adminAvatar = 'data:image/jpeg;base64,' . base64_encode($adminData['profile_image']);
+        $adminFirstName  = $adminData['first_name']  ?? '';
+        $adminMiddleName = $adminData['middle_name'] ?? '';
+        $adminLastName   = $adminData['last_name']   ?? '';
+
+        $adminMiddleInitial = !empty($adminMiddleName) ? strtoupper(substr($adminMiddleName, 0, 1)) . '.' : '';
+        $adminFullName      = trim($adminFirstName . ' ' . $adminMiddleInitial . ' ' . $adminLastName) ?: 'Administrator';
+        $adminInitials      = strtoupper(substr($adminFirstName, 0, 1) . substr($adminMiddleName, 0, 1) . substr($adminLastName, 0, 1)) ?: 'A';
+
+        if (!empty($adminData['profile_image'])) {
+            $fi       = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = $fi->buffer($adminData['profile_image']);
+            if (!$mimeType || strpos($mimeType, 'image/') !== 0) $mimeType = 'image/jpeg';
+            $adminAvatar = 'data:' . $mimeType . ';base64,' . base64_encode($adminData['profile_image']);
         }
     }
 }
@@ -78,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax']) && $_POST['aj
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── FETCH ALL APPROVED EVENTS (includes is_restricted + type_name) ──
+// ── FETCH ALL APPROVED EVENTS ──
 // ═══════════════════════════════════════════════════════════════════════════════
 $now    = new DateTime();
 $events = [];
@@ -151,7 +159,7 @@ $approvalRate  = $approvalStats['total_reviewed'] > 0
     : 0;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── DEPARTMENTS LIST (for filter dropdown) ──
+// ── DEPARTMENTS LIST ──
 // ═══════════════════════════════════════════════════════════════════════════════
 $depts    = [];
 $deptStmt = $pdo->query("SELECT dept_name FROM departments ORDER BY dept_name");
@@ -160,7 +168,7 @@ while ($r = $deptStmt->fetch(PDO::FETCH_ASSOC)) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── RECENT ACTIVITIES (with event_id for JS filtering) ──
+// ── RECENT ACTIVITIES ──
 // ═══════════════════════════════════════════════════════════════════════════════
 $activityStmt = $pdo->query("
     (SELECT e.event_id, 'Event Created' AS action, e.title AS details,
@@ -182,7 +190,7 @@ $activityStmt = $pdo->query("
 $recentActivities = $activityStmt->fetchAll(PDO::FETCH_ASSOC);
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── REQUIRED VS GENERAL (for initial badge values) ──
+// ── REQUIRED VS GENERAL ──
 // ═══════════════════════════════════════════════════════════════════════════════
 $reqGenStmt = $pdo->query("
     SELECT
@@ -289,6 +297,14 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
                 <i class="fas fa-building w-5 text-center"></i> Organizations & Clubs
             </a>
 
+            <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Communication</p>
+            <a href="/admin/admin_chat.php"
+               class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                <i class="fas fa-comments w-5 text-center"></i>
+                Messages
+                <span id="sidebarBadge" class="ml-auto hidden text-[10px] font-bold bg-primary-500 text-white rounded-full px-1.5 py-0.5"></span>
+            </a>
+
             <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 px-3 mb-2 mt-6 uppercase tracking-wider">Insights</p>
             <a href="/admin/admin_insight.php"
                 class="nav-item active flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium">
@@ -316,7 +332,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
     <!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
     <main class="flex-1 lg:ml-64 min-w-0 flex flex-col">
 
-        <!-- Sticky Header (no search input) -->
+        <!-- Sticky Header -->
         <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-800/80 backdrop-blur-xl border-b border-gray-200 dark:border-slate-700 px-4 sm:px-8 py-4 flex items-center gap-4">
 
             <button onclick="openSidebar()"
@@ -335,16 +351,16 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
 
             <div class="flex items-center gap-3 pl-4 border-l border-gray-200 dark:border-slate-700">
                 <div class="hidden md:block text-right">
-                    <p class="text-sm font-semibold text-slate-900 dark:text-white leading-none"><?= $adminFullName ?></p>
+                    <p class="text-sm font-semibold text-slate-900 dark:text-white leading-none"><?= htmlspecialchars($adminFullName) ?></p>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Administrator</p>
                 </div>
                 <div class="relative cursor-pointer">
                     <?php if ($adminAvatar): ?>
-                        <img src="<?= $adminAvatar ?>" alt="<?= $adminFullName ?>"
+                        <img src="<?= $adminAvatar ?>" alt="<?= htmlspecialchars($adminFullName) ?>"
                             class="w-10 h-10 rounded-full object-cover border-2 border-white dark:border-slate-600 shadow-md">
                     <?php else: ?>
                         <div class="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center text-white text-sm font-bold shadow-md">
-                            <?= strtoupper(substr($adminFirstName, 0, 1) . substr($adminLastName, 0, 1)) ?>
+                            <?= htmlspecialchars($adminInitials) ?>
                         </div>
                     <?php endif; ?>
                     <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
@@ -356,7 +372,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
         <div class="flex-1 px-4 sm:px-8 py-8 space-y-8">
 
             <!-- Page Title -->
-            <div>
+            <div class="page-title-block">
                 <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">Reports & Analytics</h1>
                 <p class="text-slate-500 dark:text-slate-400 mt-2">Attendance reports, event metrics, and engagement analytics.</p>
             </div>
@@ -364,9 +380,9 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
             <!-- ── STICKY FILTER BAR ── -->
             <div class="filter-sticky flex flex-col sm:flex-row gap-4 p-3 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
                 <div class="relative flex-1">
-                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
                     <input type="text" id="searchEvent" placeholder="Search events by title..."
-                        class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-sm dark:text-white">
+                        class="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 text-sm dark:text-white placeholder-slate-400">
                 </div>
                 <select id="filterStatus"
                     class="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-primary-500/20 text-sm font-medium text-slate-600 dark:text-slate-200 appearance-none min-w-[160px] cursor-pointer">
@@ -383,31 +399,31 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
                     <?php endforeach; ?>
                 </select>
                 <button onclick="resetFilters()"
-                    class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 whitespace-nowrap">
-                    Reset
+                    class="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 whitespace-nowrap transition-colors">
+                    <i class="fas fa-rotate-left mr-1.5 text-xs"></i> Reset
                 </button>
             </div>
 
-            <!-- ── STAT CARDS (3-col, no Avg Review Time) ── -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            <!-- ── STAT CARDS ── -->
+            <div class="stat-cards-row grid grid-cols-1 sm:grid-cols-3 gap-5">
 
                 <div class="stat-card bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden">
                     <div class="absolute top-4 right-4 w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
-                        <i class="fas fa-users text-blue-500 dark:text-blue-400 text-lg"></i>
+                        <i class="fas fa-users text-blue-500 dark:text-blue-400 text-lg stat-icon"></i>
                     </div>
                     <div class="pr-14">
-                        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Avg Attendance</p>
-                        <p id="stat-avg-att" class="text-3xl font-bold text-slate-900 dark:text-white leading-none"><?= $avgAttendanceRate ?>%</p>
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Avg Attendance</p>
+                        <p id="stat-avg-att" class="text-3xl font-bold text-slate-900 dark:text-white leading-none stat-value"><?= $avgAttendanceRate ?>%</p>
                     </div>
                 </div>
 
                 <div class="stat-card bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden">
                     <div class="absolute top-4 right-4 w-12 h-12 rounded-xl bg-yellow-100 dark:bg-yellow-500/20 flex items-center justify-center">
-                        <i class="fas fa-star text-yellow-500 dark:text-yellow-400 text-lg"></i>
+                        <i class="fas fa-star text-yellow-500 dark:text-yellow-400 text-lg stat-icon"></i>
                     </div>
                     <div class="pr-14">
-                        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Avg Feedback</p>
-                        <p id="stat-avg-rat" class="text-3xl font-bold text-slate-900 dark:text-white leading-none">
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Avg Feedback</p>
+                        <p id="stat-avg-rat" class="text-3xl font-bold text-slate-900 dark:text-white leading-none stat-value">
                             <?= $overallRating ?> <span class="text-sm text-slate-400 font-normal">/ 5</span>
                         </p>
                     </div>
@@ -415,18 +431,18 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
 
                 <div class="stat-card bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-slate-700 relative overflow-hidden">
                     <div class="absolute top-4 right-4 w-12 h-12 rounded-xl bg-green-100 dark:bg-green-500/20 flex items-center justify-center">
-                        <i class="fas fa-shield-alt text-green-500 dark:text-green-400 text-lg"></i>
+                        <i class="fas fa-shield-alt text-green-500 dark:text-green-400 text-lg stat-icon"></i>
                     </div>
                     <div class="pr-14">
-                        <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Approval Rate</p>
-                        <p class="text-3xl font-bold text-slate-900 dark:text-white leading-none"><?= $approvalRate ?>%</p>
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Approval Rate</p>
+                        <p class="text-3xl font-bold text-slate-900 dark:text-white leading-none stat-value"><?= $approvalRate ?>%</p>
                     </div>
                 </div>
 
             </div>
 
             <!-- ── CHARTS ROW 1 ── -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="chart-row-1 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div class="stat-card bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
                     <h3 class="text-base font-bold text-slate-900 dark:text-white mb-6">Monthly Event Trend</h3>
@@ -447,7 +463,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
             </div>
 
             <!-- ── CHARTS ROW 2 ── -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="chart-row-2 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <div class="stat-card bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
                     <h3 class="text-base font-bold text-slate-900 dark:text-white mb-6">Event Type Distribution</h3>
@@ -462,7 +478,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
             </div>
 
             <!-- ── REQUIRED VS GENERAL + RECENT ACTIVITY ── -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bottom-row grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                 <!-- Required vs General -->
                 <div class="stat-card bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700">
@@ -472,20 +488,20 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                 <span class="inline-flex items-center gap-1 mr-3">
                                     <i class="fas fa-lock text-rose-400 text-[10px]"></i>
-                                    Required — restricted events (is_restricted = 1)
+                                    Required — restricted (is_restricted = 1)
                                 </span>
                                 <span class="inline-flex items-center gap-1">
                                     <i class="fas fa-unlock text-emerald-400 text-[10px]"></i>
-                                    General — open/voluntary for all students
+                                    General — open / voluntary
                                 </span>
                             </p>
                         </div>
                         <div class="grid grid-cols-2 gap-3 flex-shrink-0">
-                            <div class="px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800 text-center">
+                            <div class="req-badge px-4 py-2 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800 text-center cursor-default">
                                 <p class="text-xs text-rose-500 dark:text-rose-400 font-semibold">Required</p>
                                 <p id="req-count" class="text-xl font-bold text-rose-600 dark:text-rose-400"><?= $reqGenData['required'] ?></p>
                             </div>
-                            <div class="px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 text-center">
+                            <div class="gen-badge px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800 text-center cursor-default">
                                 <p class="text-xs text-emerald-500 dark:text-emerald-400 font-semibold">General</p>
                                 <p id="gen-count" class="text-xl font-bold text-emerald-600 dark:text-emerald-400"><?= $reqGenData['general'] ?></p>
                             </div>
@@ -496,7 +512,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
                     </div>
                 </div>
 
-                <!-- Recent Activity (JS-rendered) -->
+                <!-- Recent Activity -->
                 <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 p-6">
                     <p class="font-bold text-slate-900 dark:text-white text-lg mb-6">Recent Activity</p>
                     <div id="recentActivityList"
@@ -508,7 +524,8 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
             </div>
 
             <!-- ── EVENT PERFORMANCE TABLE ── -->
-            <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col">
+            <div class="perf-table-wrap bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col">
+
                 <div class="p-6 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
                     <div>
                         <p class="font-bold text-slate-900 dark:text-white text-lg">Event Performance</p>
@@ -519,19 +536,45 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
                         <i class="fas fa-file-csv"></i> Download CSV
                     </button>
                 </div>
+
                 <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm whitespace-nowrap">
-                        <thead class="bg-gray-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider text-xs">
+                    <!--
+                        TABLE ALIGNMENT FIX
+                        ─────────────────────────────────────────────────────────
+                        • table-layout: fixed + <colgroup> guarantees every <th>
+                          and its corresponding <td> share the same pixel width.
+                        • No more drifting columns regardless of cell content.
+                        ─────────────────────────────────────────────────────────
+                    -->
+                    <table class="event-perf-table text-left text-sm">
+                        <colgroup>
+                            <col class="col-title">
+                            <col class="col-status">
+                            <col class="col-attendance">
+                            <col class="col-rating">
+                            <col class="col-action">
+                        </colgroup>
+                        <thead class="bg-gray-50 dark:bg-slate-700/50 border-b border-gray-100 dark:border-slate-700">
                             <tr>
-                                <th class="px-6 py-4">Event Title</th>
-                                <th class="px-6 py-4">Status</th>
-                                <th class="px-6 py-4">Attendance</th>
-                                <th class="px-6 py-4 text-center">Rating</th>
-                                <th class="px-6 py-4 text-right">Action</th>
+                                <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Event Title
+                                </th>
+                                <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th class="px-6 py-4 text-left text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Attendance
+                                </th>
+                                <th class="px-6 py-4 text-center text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Rating
+                                </th>
+                                <th class="px-6 py-4 text-right text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                    Action
+                                </th>
                             </tr>
                         </thead>
-                        <tbody id="eventTableBody" class="divide-y divide-gray-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300 font-medium">
-                            <!-- rendered by JS -->
+                        <tbody id="eventTableBody" class="divide-y divide-gray-100 dark:divide-slate-700/50 text-slate-700 dark:text-slate-300">
+                            <!-- rendered by JS renderEventTable() -->
                         </tbody>
                     </table>
                 </div>
@@ -549,7 +592,7 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
         <div class="flex justify-between items-center mb-5 pb-3 border-b border-gray-100 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
             <h3 class="text-lg font-extrabold text-slate-900 dark:text-white">Event Feedback Details</h3>
             <button onclick="closeEventModal()"
-                class="text-slate-400 hover:text-red-500 w-8 h-8 rounded-full hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center">
+                class="text-slate-400 hover:text-red-500 w-8 h-8 rounded-full hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center transition-colors">
                 <i class="fas fa-times"></i>
             </button>
         </div>
@@ -567,7 +610,6 @@ $reqGenJson     = json_encode($reqGenData,       JSON_HEX_TAG | JSON_HEX_APOS | 
         reqGen:     <?= $reqGenJson ?>,
     };
 </script>
-
 <script src="/js/admin_insight.js"></script>
 </body>
 </html>

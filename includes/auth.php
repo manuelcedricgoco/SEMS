@@ -3,7 +3,7 @@
 // │ SESSION AT DB CONNECTION                                            │
 // └─────────────────────────────────────────────────────────────────────┘
 session_start();
-include("db.php");
+$pdo = require_once '../includes/db.php';
 
 // ┌─────────────────────────────────────────────────────────────────────┐
 // │ ADMIN SECRET KEY                                                    │
@@ -338,39 +338,35 @@ if (isset($_POST['login'])) {
     $stmt->execute([$email]);
     $user = $stmt->fetch();
 
-    if ($user && password_verify($pass, $user['password'])) {
+    if (!$user) {
+    $message      = "Your email is incorrect. No account found with that email address.";
+    $message_type = "error";
 
-        // ┌──────────────────────────────────────────────────────────────┐
-        // │ FIX: ARCHIVED ACCOUNT GUARD                                  │
-        // │ If deleted_at is set, the account has been archived by an    │
-        // │ admin. Block the login and show a clear error — no session   │
-        // │ is created so the user cannot access any protected page.     │
-        // └──────────────────────────────────────────────────────────────┘
-        if (!empty($user['deleted_at'])) {
-            $message      = "Your account has been archived by the administrator. Please contact your admin for assistance.";
-            $message_type = "error";
+} elseif (!password_verify($pass, $user['password'])) {
+    $message      = "Your password is incorrect. Please try again.";
+    $message_type = "error";
 
-        } else {
-            // Account is active — create session and redirect
-            $_SESSION['user_id'] = $user['user_id'];
-            $_SESSION['role']    = $user['role'];
-
-            if ($user['role'] === 'admin') {
-                $target = "/admin/admin_dashboard.php";
-            } elseif ($user['role'] === 'organizer') {
-                $target = "/organizer/organizer_panel.php";
-            } else {
-                $target = "/student/student_dashboard.php";
-            }
-
-            header("Location: $target");
-            exit;
-        }
+} else {
+    if (!empty($user['deleted_at'])) {
+        $message      = "Your account has been archived by the administrator. Please contact your admin for assistance.";
+        $message_type = "error";
 
     } else {
-        $message      = "Invalid email or password!";
-        $message_type = "error";
+        $_SESSION['user_id'] = $user['user_id'];
+        $_SESSION['role']    = $user['role'];
+
+        if ($user['role'] === 'admin') {
+            $target = "/admin/admin_dashboard.php";
+        } elseif ($user['role'] === 'organizer') {
+            $target = "/organizer/organizer_panel.php";
+        } else {
+            $target = "/student/student_dashboard.php";
+        }
+
+        header("Location: $target");
+        exit;
     }
+}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

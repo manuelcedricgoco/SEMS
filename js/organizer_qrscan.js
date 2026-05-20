@@ -30,11 +30,6 @@ function setFilter(f) {
         .forEach(btn => btn.classList.toggle("active", btn.dataset.filter === f));
     applyFilters();
 }
-function syncSearch(val) {
-    document.getElementById("headerSearch").value = val;
-    document.getElementById("pageSearch").value   = val;
-    applyFilters();
-}
 function applyFilters() {
     const q     = (document.getElementById("pageSearch").value || "").toLowerCase().trim();
     const cards = document.querySelectorAll(".event-card");
@@ -73,22 +68,17 @@ function captureVideoFrame() {
 
 /* ══════════════════════════════════════════════════════════════
    PROOF CAMERA OVERLAY
-   Live getUserMedia stream inside a dedicated overlay.
-   NULL-SAFE throughout — works even before the PHP overlay div
-   has been added to the page.
 ══════════════════════════════════════════════════════════════ */
 let proofCameraStream = null;
 
 function openProofCamera() {
     const overlay = document.getElementById('proofCameraOverlay');
 
-    /* PHP overlay div not yet added → fall back to file input */
     if (!overlay) {
         document.getElementById('manualProofInput').click();
         return;
     }
 
-    /* Show overlay immediately so the user sees feedback */
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
 
@@ -97,20 +87,16 @@ function openProofCamera() {
     const errBox = document.getElementById('proofCameraError');
     const capBtn = document.getElementById('proofCaptureBtn');
 
-    /* Reset error state from any previous attempt */
     if (errBox) errBox.classList.add('hidden');
     if (capBtn) capBtn.disabled = true;
     if (hint)   hint.textContent = 'Starting camera…';
 
-    /* Request environment (rear) camera first so it points at the student.
-       On desktop this usually resolves to the only available webcam.       */
     navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
     })
     .then(stream => startStream(stream))
     .catch(() => {
-        /* Retry with any camera (front-facing webcam on a laptop, etc.) */
         navigator.mediaDevices.getUserMedia({ video: true, audio: false })
         .then(stream => startStream(stream))
         .catch(err => {
@@ -141,7 +127,6 @@ function captureProofPhoto() {
     const dataUrl  = canvas.toDataURL('image/jpeg', 0.82);
     manualProofB64 = dataUrl.split(',')[1];
 
-    /* Show thumbnail in the proof zone */
     document.getElementById('manualProofImg').src = dataUrl;
     document.getElementById('manualProofPlaceholder').classList.add('hidden');
     document.getElementById('manualProofPreview').classList.remove('hidden');
@@ -150,7 +135,6 @@ function captureProofPhoto() {
     closeProofCamera();
 }
 
-/* ── NULL-SAFE: safe to call whether or not the overlay div exists ── */
 function closeProofCamera() {
     if (proofCameraStream) {
         proofCameraStream.getTracks().forEach(t => t.stop());
@@ -163,7 +147,6 @@ function closeProofCamera() {
     }
 }
 
-/* Called from error state inside the overlay */
 function proofFallbackFilePicker() {
     closeProofCamera();
     document.getElementById('manualProofInput').click();
@@ -181,7 +164,6 @@ function resetManualProof() {
     if (zone)        { zone.classList.remove('captured'); zone.style.borderColor = ''; zone.style.background = ''; }
 }
 
-/* Fallback handler when file input is used instead of camera */
 function handleManualProof(input) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
@@ -399,9 +381,8 @@ function openManual(title, eventId) {
     switchInputTab("qr");
 }
 
-/* ── closeManual: null-safe, X button always works ── */
 function closeManual() {
-    closeProofCamera();      /* null-safe — no crash if overlay div absent */
+    closeProofCamera();
     hideModal("manualModal");
 }
 
@@ -447,7 +428,6 @@ async function submitManual() {
         return;
     }
 
-    /* ── HARD BLOCK: proof photo required ── */
     if (!manualProofB64) {
         setFB("mfb-error",'<i class="fas fa-camera-slash"></i> Capture the student\'s photo first — tap the camera zone above');
         const zone = document.getElementById('manualProofZone');

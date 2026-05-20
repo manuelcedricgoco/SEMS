@@ -172,25 +172,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
     $eventId  = (int)($_POST['event_id'] ?? 0);
     $scanType = $_POST['scan_type']       ?? 'login';
 
-    // ══════════════════════════════════════════════════════════
-    // PROOF IMAGE: decode the base64 photo sent by the JS layer.
-    //
-    // For live camera scan  → frame captured at the exact moment
-    //                          of QR decode (captureVideoFrame())
-    // For photo-upload mode → the uploaded file itself
-    // For manual entry      → organizer-captured photo of student
-    //
-    // This creates a forensic record: whoever physically presented
-    // the QR is photographed. If Student A scans Student B's code,
-    // BOTH records will contain Student A's face — fraud is visible
-    // on the attendance review page.
-    // ══════════════════════════════════════════════════════════
     $proofImageB64 = trim($_POST['proof_image'] ?? '');
     $proofImageBin = '';
     if ($proofImageB64 !== '') {
         $decoded = base64_decode($proofImageB64, true);
         if ($decoded !== false) {
-            // Basic sanity: must be an image (JPEG/PNG/GIF/WEBP magic bytes)
             $finfo     = finfo_open(FILEINFO_MIME_TYPE);
             $proofMime = finfo_buffer($finfo, $decoded);
             if ($proofMime && strpos($proofMime, 'image/') === 0) {
@@ -204,10 +190,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
         exit();
     }
 
-    // ══════════════════════════════════════════════════════════
-    // SOFT-DELETE / ARCHIVE GUARD
-    // events.deleted_at IS NOT NULL means archived — block scans.
-    // ══════════════════════════════════════════════════════════
     $archiveCheckQ = $pdo->prepare("
         SELECT status, deleted_at FROM events WHERE event_id = ?
     ");
@@ -225,12 +207,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
     try {
         $pdo->beginTransaction();
 
-        // ── STEP 1: Hanapin ang user gamit ang QR value ──────────────
         $qrQ = $pdo->prepare("SELECT user_id FROM student_qr_codes WHERE qr_value = ?");
         $qrQ->execute([$qrValue]);
         $qrRow = $qrQ->fetch(PDO::FETCH_ASSOC);
 
-        // ── STEP 2: Fallback #1 — student number sa profiles ─────────
         if (!$qrRow) {
             $snQ = $pdo->prepare("
                 SELECT u.user_id FROM users u
@@ -241,7 +221,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
             $snRow = $snQ->fetch(PDO::FETCH_ASSOC);
             if ($snRow) $qrRow = $snRow;
 
-            // ── STEP 3: Fallback #2 — student number sa organizer ────
             if (!$qrRow) {
                 $onQ = $pdo->prepare("
                     SELECT u.user_id FROM users u
@@ -262,7 +241,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
 
         $studentId = $qrRow['user_id'];
 
-        // ── STEP 4: Kunin ang student info ───────────────────────────
         $spQ = $pdo->prepare("
             SELECT CONCAT(first_name,' ',last_name) AS name, year_level, section
             FROM profiles WHERE user_id = ?
@@ -285,7 +263,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
             exit();
         }
 
-        // ── STEP 5: Check existing attendance record ngayon ──────────
         $checkQ = $pdo->prepare("
             SELECT attendance_id, login_time, logout_time
             FROM attendance
@@ -294,7 +271,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
         $checkQ->execute([$eventId, $studentId]);
         $existing = $checkQ->fetch(PDO::FETCH_ASSOC);
 
-        // ── DUPLICATE-STATE GUARD ─────────────────────────────────────
         if ($existing) {
             if ($scanType === 'login' && !empty($existing['login_time'])) {
                 $pdo->rollBack();
@@ -325,21 +301,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
             }
         }
 
-        // ── STEP 6: I-save ang attendance record ──────────────────────
-        //
-        // proof_image stores the captured photo of whoever physically
-        // presented the QR. On an initial INSERT (first scan of the day)
-        // we write the proof immediately.
-        //
-        // On an UPDATE for login (edge-case: logout was recorded first),
-        // we also update proof_image so it always reflects the login scan.
-        //
-        // On an UPDATE for logout we deliberately keep the existing
-        // proof_image (the login-time face) as the primary record.
-        // ─────────────────────────────────────────────────────────────
         if ($existing) {
             if ($scanType === 'login') {
-                // Update login time AND refresh proof image for the login scan
                 $attIns  = $pdo->prepare("
                     UPDATE attendance
                     SET login_time  = NOW(),
@@ -349,7 +312,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
                 ");
                 $success = $attIns->execute([$proofImageBin, $uid, $existing['attendance_id']]);
             } else {
-                // Logout: only update logout_time; preserve the login proof_image
                 $attIns  = $pdo->prepare("
                     UPDATE attendance
                     SET logout_time = NOW(),
@@ -377,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
                 $studentId,
                 $student['year_level'],
                 $student['section'],
-                $proofImageBin,   // ← was '' (empty) — now stores the actual photo
+                $proofImageBin,
                 $uid,
             ]);
         }
@@ -584,7 +546,7 @@ unset($ev);
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400 flex items-center justify-center text-sm">
                     <i class="fas fa-clipboard-list"></i>
                 </span>
-                <span class="flex-1">Events  & Announcements</span>
+                <span class="flex-1">Events & Announcements</span>
                 <?php if ($myEvents > 0): ?>
                     <span class="text-xs bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-400 px-2 py-0.5 rounded-full font-semibold"><?= $myEvents ?></span>
                 <?php endif; ?>
@@ -626,6 +588,28 @@ unset($ev);
                 </span>
                 Analytics
             </a>
+
+            <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Communication</p>
+
+            <a href="/organizer/organizer_chat.php"
+               class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+               aria-current="page">
+                <span class="icon-wrap w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-500 dark:text-rose-400 flex items-center justify-center text-sm">
+    <i class="fas fa-comments"></i>
+</span>
+                Messages
+                <span id="sidebarBadge"
+                      class="ml-auto text-[11px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full font-semibold hidden"></span>
+            </a>
+
+            <a href="/organizer/organizer_admin_chat.php"
+               class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
+                <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-sm">
+    <i class="fas fa-user-shield"></i>
+</span>
+                Admin Messages
+                <span id="adminBadge" class="ml-auto hidden text-[10px] font-bold bg-brand-500 text-white rounded-full px-1.5 py-0.5"></span>
+            </a>
         </nav>
 
         <div class="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
@@ -663,18 +647,7 @@ unset($ev);
                     <i class="fas fa-bars"></i>
                 </button>
                 <span class="hidden sm:block text-lg font-semibold text-gray-900 dark:text-white">QR Scanner</span>
-                <div class="flex-1 mx-2 sm:mx-4 max-w-xs sm:max-w-sm">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-                        <input type="text" id="headerSearch" oninput="syncSearch(this.value)"
-                            placeholder="Search events…"
-                            class="w-full pl-9 pr-4 py-2 text-sm rounded-lg
-                                  bg-gray-100 dark:bg-gray-700
-                                  border border-transparent focus:border-brand-400 dark:focus:border-brand-500
-                                  text-gray-700 dark:text-gray-200 placeholder-gray-400
-                                  outline-none transition-colors">
-                    </div>
-                </div>
+
                 <div class="flex items-center gap-2 ml-auto">
                     <button onclick="toggleTheme()" title="Toggle theme"
                         class="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-amber-400
@@ -752,7 +725,7 @@ unset($ev);
                 </div>
                 <div class="sm:ml-auto relative w-full sm:w-64">
                     <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none"></i>
-                    <input type="text" id="pageSearch" oninput="syncSearch(this.value)"
+                    <input type="text" id="pageSearch" oninput="applyFilters()"
                         placeholder="Search events…"
                         class="w-full pl-9 pr-4 py-2 text-sm rounded-lg
                               bg-gray-50 dark:bg-gray-700
@@ -1115,15 +1088,6 @@ unset($ev);
                     </p>
                 </div>
 
-                <!-- ════════════════════════════════════════════════════
-                     PROOF IMAGE CAPTURE (Manual Entry)
-                     ════════════════════════════════════════════════════
-                     Anti-cheat: organizer physically photographs the
-                     student standing in front of them before submitting.
-                     The captured face is stored as proof_image in the
-                     attendance record — same as the automatic capture
-                     done during live QR scan mode.
-                ════════════════════════════════════════════════════ -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -1136,18 +1100,15 @@ unset($ev);
                         </span>
                     </div>
 
-                    <!-- Hidden file input — camera capture on mobile -->
                     <input type="file" id="manualProofInput"
                         accept="image/*" capture="environment"
                         class="hidden" onchange="handleManualProof(this)">
 
-                    <!-- Tap zone -->
                     <div id="manualProofZone"
                         class="proof-zone"
                         onclick="document.getElementById('manualProofInput').click()"
                         title="Tap to capture student photo">
 
-                        <!-- Placeholder state -->
                         <div id="manualProofPlaceholder" class="text-center py-3 px-4 select-none">
                             <div class="w-10 h-10 rounded-xl mx-auto mb-2 flex items-center justify-center"
                                 style="background:rgba(168,85,247,.12); border:1px solid rgba(168,85,247,.2);">
@@ -1161,7 +1122,6 @@ unset($ev);
                             </p>
                         </div>
 
-                        <!-- Preview state (shown after capture) -->
                         <div id="manualProofPreview" class="hidden text-center py-2 px-3">
                             <img id="manualProofImg"
                                 class="max-h-20 mx-auto rounded-lg ring-2 ring-[rgba(34,197,94,0.4)]"
@@ -1169,7 +1129,6 @@ unset($ev);
                             <p class="text-[10px] mt-1.5 font-semibold" style="color:rgba(34,197,94,.8);">
                                 <i class="fas fa-check-circle mr-1"></i> Photo captured
                             </p>
-                            <!-- Retake button -->
                             <button class="proof-retake-btn"
                                 onclick="event.stopPropagation(); resetManualProof();"
                                 title="Retake photo">
@@ -1183,7 +1142,6 @@ unset($ev);
                         Stored privately · visible only on attendance review
                     </p>
                 </div>
-                <!-- END PROOF IMAGE CAPTURE -->
 
                 <button id="manualSubmitBtn" onclick="submitManual()"
                     class="manual-submit-btn btn-login">

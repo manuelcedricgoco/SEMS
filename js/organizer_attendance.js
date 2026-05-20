@@ -1,14 +1,6 @@
 /**
  * SEMS Organizer — organizer_attendance.js  (Enhanced)
  * ──────────────────────────────────────────────────────
- * Changes from original:
- *  • ALL browser confirm() calls removed — replaced with
- *    custom styled modals (archive / restore / delete)
- *  • Archived rows show Restore + Delete buttons
- *  • Delete permanently removes the record (new POST action)
- *  • Modal open/close helpers for all three confirm modals
- *  • Keyboard Esc closes the front-most open modal
- *
  * Requires SEMS_ATTENDANCE_DATA defined inline before this script.
  */
 
@@ -80,14 +72,6 @@ document.addEventListener('DOMContentLoaded', function () {
 // ═══════════════════════════════════════════════════════════════
 // SEARCH + FILTER
 // ═══════════════════════════════════════════════════════════════
-
-function syncSearch(val) {
-    var h = document.getElementById('headerSearch');
-    var p = document.getElementById('pageSearch');
-    if (h) h.value = val;
-    if (p) p.value = val;
-    filterAttendance();
-}
 
 function filterAttendance() {
     var q            = ((document.getElementById('pageSearch')   || {}).value || '').toUpperCase().trim();
@@ -441,18 +425,15 @@ function _showEditMsg(text, type) {
 // CUSTOM CONFIRMATION MODALS — SHARED STATE
 // ═══════════════════════════════════════════════════════════════
 
-var _pendingActionRow = null;   // TR the modal was triggered from
-var _pendingActionBtn = null;   // button that triggered it
+var _pendingActionRow = null;
+var _pendingActionBtn = null;
 
-/* ── helper: lock/unlock body scroll ── */
 function _lockScroll()   { document.body.style.overflow = 'hidden'; }
 function _unlockScroll() { document.body.style.overflow = ''; }
 
-/* ── helper: show/hide any modal el ── */
 function _showModal(el)  { el.classList.remove('hidden'); el.classList.add('flex'); _lockScroll(); }
 function _hideModal(el)  { el.classList.add('hidden'); el.classList.remove('flex'); _unlockScroll(); }
 
-/* ── helper: set btn loading state ── */
 function _btnLoading(btn, loading, originalHtml) {
     if (loading) {
         btn.disabled  = true;
@@ -478,11 +459,9 @@ function openArchiveModal(btn) {
     _pendingActionRow = row;
     _pendingActionBtn = btn;
 
-    // Populate info
     document.getElementById('archiveModalStudent').textContent = row.dataset.studentName || '—';
     document.getElementById('archiveModalEvent').textContent   = row.dataset.eventTitle  || '—';
 
-    // Reset confirm button
     var confirmBtn = document.getElementById('archiveModalConfirmBtn');
     confirmBtn.disabled  = false;
     confirmBtn.innerHTML = '<i class="fas fa-box-archive"></i> Archive';
@@ -499,7 +478,6 @@ function closeArchiveModal() {
 function confirmArchive() {
     if (!_pendingActionRow) return;
     var row   = _pendingActionRow;
-    var btn   = _pendingActionBtn;
     var attId = _getAttId(row);
     if (!attId) { closeArchiveModal(); return; }
 
@@ -509,12 +487,9 @@ function confirmArchive() {
     _postAction({ action: 'archive', attendance_id: attId }, function (data) {
         if (data.success) {
             closeArchiveModal();
-
-            // Mark row as archived
             row.dataset.archived = '1';
             row.classList.add('att-archived');
 
-            // Add archived badge to event cell
             var evCell = row.cells[0];
             if (evCell && !evCell.querySelector('.archived-badge')) {
                 var badge = document.createElement('span');
@@ -523,16 +498,13 @@ function confirmArchive() {
                 evCell.appendChild(badge);
             }
 
-            // Replace action buttons: remove Archive btn → add Restore + Delete
             var actionsCell = row.cells[row.cells.length - 1];
             if (actionsCell) {
                 var wrap = actionsCell.querySelector('.flex');
                 if (wrap) {
-                    // Remove archive button
                     var archiveBtn = wrap.querySelector('[title="Archive record"]');
                     if (archiveBtn) archiveBtn.remove();
 
-                    // Add Restore button
                     var restoreBtn = document.createElement('button');
                     restoreBtn.title     = 'Restore record';
                     restoreBtn.className = 'w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800 hover:bg-brand-500 hover:text-white hover:border-brand-500 transition-all active:scale-95';
@@ -540,7 +512,6 @@ function confirmArchive() {
                     restoreBtn.setAttribute('onclick', 'openRestoreModal(this)');
                     wrap.appendChild(restoreBtn);
 
-                    // Add Delete button
                     var deleteBtn = document.createElement('button');
                     deleteBtn.title     = 'Delete permanently';
                     deleteBtn.className = 'w-8 h-8 rounded-lg flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-500 dark:text-red-400 border border-red-200 dark:border-red-800 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95';
@@ -550,7 +521,6 @@ function confirmArchive() {
                 }
             }
 
-            // Update archived counter
             var ac = document.getElementById('archivedCount');
             if (ac) ac.textContent = parseInt(ac.textContent || 0, 10) + 1;
 
@@ -606,27 +576,21 @@ function confirmRestore() {
     _postAction({ action: 'unarchive', attendance_id: attId }, function (data) {
         if (data.success) {
             closeRestoreModal();
-
-            // Mark row as active
             row.dataset.archived = '0';
             row.classList.remove('att-archived');
 
-            // Remove archived badge
             var badge = row.querySelector('.archived-badge');
             if (badge) badge.remove();
 
-            // Replace Restore + Delete buttons → Details + Archive
             var actionsCell = row.cells[row.cells.length - 1];
             if (actionsCell) {
                 var wrap = actionsCell.querySelector('.flex');
                 if (wrap) {
-                    // Clear restore/delete
                     var rBtn = wrap.querySelector('[title="Restore record"]');
                     var dBtn = wrap.querySelector('[title="Delete permanently"]');
                     if (rBtn) rBtn.remove();
                     if (dBtn) dBtn.remove();
 
-                    // Re-add Details button if not present
                     if (!wrap.querySelector('[title="View / Edit"]')) {
                         var detBtn = document.createElement('button');
                         detBtn.title     = 'View / Edit';
@@ -636,7 +600,6 @@ function confirmRestore() {
                         wrap.prepend(detBtn);
                     }
 
-                    // Add Archive button
                     var archBtn = document.createElement('button');
                     archBtn.title     = 'Archive record';
                     archBtn.className = 'w-8 h-8 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 text-amber-500 border border-gray-200 dark:border-gray-600 hover:bg-amber-500 hover:text-white hover:border-amber-500 transition-all active:scale-95';
@@ -646,7 +609,6 @@ function confirmRestore() {
                 }
             }
 
-            // Update counter
             var ac = document.getElementById('archivedCount');
             if (ac) ac.textContent = Math.max(0, parseInt(ac.textContent || 0, 10) - 1);
 
@@ -661,7 +623,7 @@ function confirmRestore() {
 
 
 // ═══════════════════════════════════════════════════════════════
-// DELETE MODAL  (permanent — danger)
+// DELETE MODAL
 // ═══════════════════════════════════════════════════════════════
 
 var _deleteModal = null;
@@ -702,14 +664,11 @@ function confirmDelete() {
     _postAction({ action: 'delete', attendance_id: attId }, function (data) {
         if (data.success) {
             closeDeleteModal();
-
-            // Animate row removal
             row.style.transition = 'opacity .3s, transform .3s';
             row.style.opacity    = '0';
             row.style.transform  = 'translateX(-20px)';
             setTimeout(function () { row.remove(); filterAttendance(); }, 320);
 
-            // Update archived counter (it was archived)
             var ac = document.getElementById('archivedCount');
             if (ac) ac.textContent = Math.max(0, parseInt(ac.textContent || 0, 10) - 1);
 
@@ -737,7 +696,7 @@ function _postAction(payload, cb) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// TOAST NOTIFICATION (replaces remaining alert() calls)
+// TOAST NOTIFICATION
 // ═══════════════════════════════════════════════════════════════
 
 var _toastTimer = null;
@@ -757,13 +716,11 @@ function _showToast(msg, type) {
     t.innerHTML = '<i class="fas ' + (isS ? 'fa-circle-check' : 'fa-circle-exclamation') + ' flex-shrink-0"></i><span>' + msg + '</span>';
     document.body.appendChild(t);
 
-    // Animate in
     requestAnimationFrame(function () {
         t.style.transform = 'translateY(0)';
         t.style.opacity   = '1';
     });
 
-    // Auto dismiss
     _toastTimer = setTimeout(function () {
         t.style.opacity   = '0';
         t.style.transform = 'translateY(8px)';
@@ -778,8 +735,6 @@ function _showToast(msg, type) {
 
 document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-
-    // Close front-most modal first
     if (_deleteModal  && !_deleteModal.classList.contains('hidden'))  { closeDeleteModal();    return; }
     if (_restoreModal && !_restoreModal.classList.contains('hidden')) { closeRestoreModal();   return; }
     if (_archiveModal && !_archiveModal.classList.contains('hidden')) { closeArchiveModal();   return; }

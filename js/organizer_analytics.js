@@ -3,24 +3,10 @@
  * Handles: Theme, Sidebar, Charts (Registration Trends,
  *          Event Performance, Department Doughnut),
  *          Chart toolbars, Download PNG,
- *          Attendance accordion / filter / CSV export,
+ *          Attendance accordion / filter / Excel export (color-coded),
  *          Feedback list (search / filter / sort / paginate)
  *
- * Requires SEMS_ANALYTICS_DATA to be defined inline before this script:
- *   <script>
- *     const SEMS_ANALYTICS_DATA = {
- *         months:        [...],
- *         regCounts:     [...],
- *         eventTitles:   [...],
- *         eventRegs:     [...],
- *         eventAttend:   [...],
- *         deptNames:     [...],
- *         deptCounts:    [...],
- *         deptColors:    [...],
- *         showDeptChart: true|false,
- *         allowedDepts:  null | [...],   // null = all; array = restricted list
- *     };
- *   <\/script>
+ * Requires SEMS_ANALYTICS_DATA to be defined inline before this script.
  */
 
 // ═══════════════════════════════════════════════════════════════
@@ -37,7 +23,6 @@ var deptNames    = _d.deptNames    || [];
 var deptCounts   = _d.deptCounts   || [];
 var deptColors   = _d.deptColors   || [];
 var showDeptChart = (_d.showDeptChart === true);
-// null = all departments allowed; string[] = restricted list
 var allowedDepts = _d.allowedDepts || null;
 
 // ═══════════════════════════════════════════════════════════════
@@ -402,10 +387,8 @@ function filterAttendanceTable() {
     var sF = (document.getElementById('attStatusFilter') || { value: 'all' }).value;
     var q  = ((document.getElementById('attSearchFilter') || { value: '' }).value || '').toLowerCase().trim();
 
-    /* Step 1 — show / hide individual rows */
     document.querySelectorAll('.attendance-row').forEach(function (row) {
         var show = true;
-        // Enforce server-side dept restriction client-side as well
         if (allowedDepts !== null && allowedDepts.indexOf(row.dataset.department) === -1) show = false;
         if (show && dF !== 'all' && row.dataset.department !== dF) show = false;
         if (show && yF !== 'all' && row.dataset.year       !== yF) show = false;
@@ -418,7 +401,6 @@ function filterAttendanceTable() {
         row.style.display = show ? '' : 'none';
     });
 
-    /* Step 2 — section containers */
     document.querySelectorAll('.attendance-section').forEach(function (sec) {
         var vis = Array.from(sec.querySelectorAll('.attendance-row'))
             .filter(function (r) { return r.style.display !== 'none'; });
@@ -431,14 +413,12 @@ function filterAttendanceTable() {
         }
     });
 
-    /* Step 3 — year-group divs only (NOT <tr> rows) */
     document.querySelectorAll('.att-year-group').forEach(function (yg) {
         var vis = Array.from(yg.querySelectorAll('.attendance-row'))
             .filter(function (r) { return r.style.display !== 'none'; });
         yg.style.display = vis.length === 0 ? 'none' : '';
     });
 
-    /* Step 4 — dept sections */
     document.querySelectorAll('.attendance-dept-section').forEach(function (ds) {
         var vis = Array.from(ds.querySelectorAll('.attendance-row'))
             .filter(function (r) { return r.style.display !== 'none'; });
@@ -453,13 +433,35 @@ function filterAttendanceTable() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ATTENDANCE — CSV export
+// ATTENDANCE — COLOR-CODED EXCEL EXPORT (.xls via HTML table)
 // ═══════════════════════════════════════════════════════════════
+
+/**
+ * Status colour map used in the exported spreadsheet.
+ * Excel renders inline styles from HTML tables perfectly.
+ *
+ * Present → green background  (#d1fae5) + dark green text (#065f46)
+ * Partial → yellow background (#fef9c3) + dark yellow text (#713f12)
+ * Absent  → red background    (#fee2e2) + dark red text   (#7f1d1d)
+ */
+var STATUS_STYLES = {
+    'Present': 'background:#d1fae5;color:#065f46;font-weight:bold;border-radius:4px;padding:2px 6px;',
+    'Partial': 'background:#fef9c3;color:#713f12;font-weight:bold;border-radius:4px;padding:2px 6px;',
+    'Absent':  'background:#fee2e2;color:#7f1d1d;font-weight:bold;border-radius:4px;padding:2px 6px;',
+};
+
+/** Cell row background tint (full row) */
+var ROW_BG = {
+    'Present': '#f0fdf4',
+    'Partial': '#fefce8',
+    'Absent':  '#fff1f2',
+};
 
 function exportAttendanceToCSV() {
     var allRows = document.querySelectorAll('.attendance-row');
     if (allRows.length === 0) { alert('No attendance data available.'); return; }
 
+    // ── Determine active filters ───────────────────────────
     var bar         = document.getElementById('attendanceFilters');
     var filtersOpen = bar && !bar.classList.contains('hidden');
 
@@ -484,32 +486,189 @@ function exportAttendanceToCSV() {
 
     if (rows.length === 0) { alert('No data to export. Please adjust your filters.'); return; }
 
-    var headers = ['Department', 'Year Level', 'Section', 'Student Name', 'Student Number', 'Status', 'Login Time', 'Logout Time', 'Event'];
-    var csv     = [headers];
+    // ── Build HTML table for Excel ──────────────────────────
+    var now       = new Date();
+    var dateLabel = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
+    var timeLabel = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
 
-    rows.forEach(function (row) {
-        var cells = row.querySelectorAll('td');
-        var g = function (i) { return cells[i] ? cells[i].textContent.trim().replace(/\u2014|—/g, '') : ''; };
-        csv.push([
-            row.dataset.department || '', row.dataset.year || '', row.dataset.section || '',
-            g(0), g(1), g(2), g(3), g(4), g(5)
-        ]);
+    var headerStyle = [
+        'background:#15803d',
+        'color:#ffffff',
+        'font-weight:bold',
+        'font-size:12px',
+        'padding:8px 12px',
+        'border:1px solid #166534',
+        'white-space:nowrap',
+    ].join(';');
+
+    var cellBase = [
+        'font-size:11px',
+        'padding:6px 10px',
+        'border:1px solid #e5e7eb',
+        'vertical-align:middle',
+    ].join(';');
+
+    var columns = [
+        { label: 'Department',     key: 'department' },
+        { label: 'Year Level',     key: 'year' },
+        { label: 'Section',        key: 'section' },
+        { label: 'Student Name',   key: 'name',   titleCase: true },
+        { label: 'Student No.',    key: 'studentNumber' },
+        { label: 'Status',         key: 'status',  colored: true },
+        { label: 'Login Time',     key: null,      tdIdx: 3 },
+        { label: 'Logout Time',    key: null,      tdIdx: 4 },
+        { label: 'Event',          key: null,      tdIdx: 5 },
+    ];
+
+    // Legend summary counts
+    var counts = { Present: 0, Partial: 0, Absent: 0 };
+    rows.forEach(function (r) {
+        var s = r.dataset.status || 'Absent';
+        if (counts[s] !== undefined) counts[s]++;
     });
 
-    var content = csv.map(function (r) {
-        return r.map(function (cell) { return '"' + String(cell).replace(/"/g, '""') + '"'; }).join(',');
-    }).join('\n');
+    // ── Assemble HTML ───────────────────────────────────────
+    var html_parts = [];
 
-    var blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    a.href     = url;
-    a.download = 'attendance_report_' + new Date().toISOString().slice(0, 19).replace(/:/g, '-') + '.csv';
-    a.style.visibility = 'hidden';
+    html_parts.push(
+        '<html xmlns:o="urn:schemas-microsoft-com:office:office"',
+        '      xmlns:x="urn:schemas-microsoft-com:office:excel"',
+        '      xmlns="http://www.w3.org/TR/REC-html40">',
+        '<head>',
+        '<meta charset="UTF-8">',
+        '<style>',
+        '  body { font-family: Calibri, Arial, sans-serif; }',
+        '  table { border-collapse: collapse; width: 100%; }',
+        '</style>',
+        '</head>',
+        '<body>'
+    );
+
+    // ── Title block ─────────────────────────────────────────
+    html_parts.push(
+        '<table style="margin-bottom:4px;">',
+        '  <tr>',
+        '    <td style="font-size:16px;font-weight:bold;color:#15803d;padding:4px 0;">',
+        '      SEMS — Overall Attendance Report',
+        '    </td>',
+        '  </tr>',
+        '  <tr>',
+        '    <td style="font-size:11px;color:#6b7280;padding-bottom:8px;">',
+        '      Exported: ' + dateLabel + ' at ' + timeLabel,
+        '    </td>',
+        '  </tr>',
+        '</table>'
+    );
+
+    // ── Legend / summary row ────────────────────────────────
+    html_parts.push(
+        '<table style="margin-bottom:12px;border-collapse:collapse;">',
+        '  <tr>',
+        '    <td style="' + cellBase + ';background:#f3f4f6;font-weight:bold;">Total Records</td>',
+        '    <td style="' + cellBase + ';background:#f3f4f6;">' + rows.length + '</td>',
+        '    <td style="width:20px;"></td>',
+        '    <td style="' + cellBase + ';' + STATUS_STYLES['Present'] + '">&#9679; Present</td>',
+        '    <td style="' + cellBase + ';background:#d1fae5;color:#065f46;">' + counts.Present + '</td>',
+        '    <td style="width:8px;"></td>',
+        '    <td style="' + cellBase + ';' + STATUS_STYLES['Partial'] + '">&#9679; Partial</td>',
+        '    <td style="' + cellBase + ';background:#fef9c3;color:#713f12;">' + counts.Partial + '</td>',
+        '    <td style="width:8px;"></td>',
+        '    <td style="' + cellBase + ';' + STATUS_STYLES['Absent'] + '">&#9679; Absent</td>',
+        '    <td style="' + cellBase + ';background:#fee2e2;color:#7f1d1d;">' + counts.Absent + '</td>',
+        '  </tr>',
+        '</table>'
+    );
+
+    // ── Main data table ─────────────────────────────────────
+    html_parts.push('<table>');
+
+    // Header row
+    html_parts.push('<thead><tr>');
+    columns.forEach(function (col) {
+        html_parts.push('<th style="' + headerStyle + '">' + col.label + '</th>');
+    });
+    html_parts.push('</tr></thead>');
+
+    // Data rows
+    html_parts.push('<tbody>');
+
+    rows.forEach(function (row, idx) {
+        var status  = row.dataset.status || 'Absent';
+        var rowBg   = ROW_BG[status] || '#ffffff';
+        var cells   = row.querySelectorAll('td');
+
+        // Alternate very light stripe on non-colored columns
+        var altBg   = (idx % 2 === 0) ? rowBg : shadeColor(rowBg, -4);
+
+        html_parts.push('<tr>');
+
+        columns.forEach(function (col) {
+            var value = '';
+
+            if (col.key !== null) {
+                value = (row.dataset[col.key] || '').trim();
+                // Title-case student name from data attribute (it's lowercase)
+                if (col.titleCase) {
+                    value = value.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+                }
+            } else if (col.tdIdx !== undefined && cells[col.tdIdx]) {
+                value = cells[col.tdIdx].textContent.trim().replace(/\u2014|—/g, '');
+            }
+
+            var cellStyle = cellBase + ';background:' + altBg + ';';
+
+            if (col.colored && col.key === 'status') {
+                // Status cell: colored pill + row tint
+                var pillStyle = STATUS_STYLES[status] || '';
+                html_parts.push(
+                    '<td style="' + cellBase + ';background:' + altBg + ';text-align:center;">',
+                    '  <span style="' + pillStyle + '">' + (value || status) + '</span>',
+                    '</td>'
+                );
+            } else {
+                html_parts.push('<td style="' + cellStyle + '">' + escHtml(value) + '</td>');
+            }
+        });
+
+        html_parts.push('</tr>');
+    });
+
+    html_parts.push('</tbody></table>');
+    html_parts.push('</body></html>');
+
+    // ── Trigger download ────────────────────────────────────
+    var content  = html_parts.join('\n');
+    var blob     = new Blob([content], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    var url      = URL.createObjectURL(blob);
+    var a        = document.createElement('a');
+    var filename = 'attendance_report_' +
+                   now.toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.xls';
+
+    a.href              = url;
+    a.download          = filename;
+    a.style.visibility  = 'hidden';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+/** Tiny helper: darken / lighten a hex colour by `pct` percent */
+function shadeColor(hex, pct) {
+    var n = parseInt(hex.replace('#', ''), 16);
+    var r = Math.min(255, Math.max(0, (n >> 16) + pct));
+    var g = Math.min(255, Math.max(0, ((n >> 8) & 0xff) + pct));
+    var b = Math.min(255, Math.max(0, (n & 0xff) + pct));
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+
+/** Escape HTML special characters for cell content */
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -526,7 +685,6 @@ function loadFeedback() {
 
 document.addEventListener('DOMContentLoaded', function () {
 
-    // Init charts
     initCharts();
 
     // Auto-expand first department accordion
@@ -542,7 +700,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var allCards = Array.from(feedbackSection.children);
 
-    // Tag each card with data attributes for filtering / sorting
     allCards.forEach(function (card) {
         var filled = card.querySelectorAll('.fa-star:not(.fa-star-half-alt)').length;
         var half   = card.querySelectorAll('.fa-star-half-alt').length;
@@ -551,7 +708,6 @@ document.addEventListener('DOMContentLoaded', function () {
         card.dataset.evTitle = spans[0] ? spans[0].textContent.trim().toLowerCase() : '';
     });
 
-    // Build toolbar DOM
     var tb = document.createElement('div');
     tb.id  = 'fbToolbar';
 
@@ -590,7 +746,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     feedbackSection.parentElement.insertBefore(tb, feedbackSection);
 
-    // Pagination
     var PER     = 4;
     var page    = 0;
     var visible = allCards.slice();
@@ -716,7 +871,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var fbEventFilter = document.getElementById('feedbackEventFilter');
     if (fbEventFilter) fbEventFilter.addEventListener('change', window.applyFbFilters);
 
-    // Wrap filter selects with icon groups
     function wrapIcon(selId, iconCls) {
         var sel = document.getElementById(selId);
         if (!sel || sel.parentElement.classList.contains('fb-filter-group')) return;

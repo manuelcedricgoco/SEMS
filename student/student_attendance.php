@@ -132,12 +132,16 @@ $historyJson = json_encode(array_map(function ($r) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/CSS/student_attendance.css">
 
-    <!-- Google Fonts: Sora (headings) + Plus Jakarta Sans (body) -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet">
-
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script>
+        /* Apply saved theme before paint to avoid flash */
+        (function () {
+            var s = localStorage.getItem('sems-dark');
+            var sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (s === 'true' || (s === null && sys)) document.documentElement.classList.add('dark');
+        })();
         tailwind.config = {
             darkMode: 'class',
             theme: {
@@ -159,20 +163,20 @@ $historyJson = json_encode(array_map(function ($r) {
          ════════════════════════════════════════════════ -->
     <aside class="sidebar" id="sidebar" aria-label="Main navigation">
 
-        <!-- Brand -->
         <div class="sb-brand">
-            <div class="sb-logo" aria-hidden="true">
-                <i data-lucide="graduation-cap" style="width:18px;height:18px;color:#fff;"></i>
-            </div>
+            <div class="sb-logo" aria-hidden="true"
+     style="background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 40%, #a855f7 100%);
+            box-shadow: 0 4px 14px rgba(139,92,246,.55), 0 0 0 3px rgba(167,139,250,.18);
+            border: 1px solid rgba(167,139,250,.3);">
+    <i data-lucide="graduation-cap" style="width:18px;height:18px;color:#fff;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3));"></i>
+</div>
             <div>
                 <div class="sb-name">SEMS</div>
                 <div class="sb-tagline">Student Portal</div>
             </div>
         </div>
 
-        <!-- Nav -->
         <nav aria-label="Site navigation">
-
             <div class="sb-section">Overview</div>
             <a href="student_dashboard.php" class="sb-link">
                 <span class="sb-link-icon"><i data-lucide="layout-dashboard" style="width:15px;height:15px;"></i></span>
@@ -198,6 +202,11 @@ $historyJson = json_encode(array_map(function ($r) {
                 <span class="sb-link-icon"><i data-lucide="message-square" style="width:15px;height:15px;"></i></span>
                 Feedback
             </a>
+            <a href="student_chat.php" class="sb-link">
+                <span class="sb-link-icon"><i data-lucide="message-circle" style="width:15px;height:15px;"></i></span>
+                Messages
+                <span id="sidebarBadge" style="display:none;margin-left:auto;background:var(--purple);color:#fff;border-radius:999px;font-size:.65rem;font-weight:700;padding:.1rem .45rem;"></span>
+            </a>
 
             <div class="sb-section">Account</div>
             <a href="student_settings.php" class="sb-link">
@@ -206,7 +215,6 @@ $historyJson = json_encode(array_map(function ($r) {
             </a>
         </nav>
 
-        <!-- Footer -->
         <div class="sb-footer">
             <div class="sb-user-pill">
                 <div class="avatar" style="width:32px;height:32px;font-size:.7rem;">
@@ -228,7 +236,6 @@ $historyJson = json_encode(array_map(function ($r) {
         </div>
     </aside>
 
-    <!-- Mobile overlay -->
     <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
 
 
@@ -295,11 +302,8 @@ $historyJson = json_encode(array_map(function ($r) {
             <!-- ── STAT CARDS ────────────────────────────── -->
             <div class="stats-grid">
 
-                <!-- Events Attended -->
                 <div class="stat-card anim" style="animation-delay:.08s;--card-bar:#7c3aed;">
-                    <div class="live-badge">
-                        <span class="live-dot"></span> Live
-                    </div>
+                    <div class="live-badge"><span class="live-dot"></span> Live</div>
                     <div class="stat-icon" style="background:#f5f3ff;border:1px solid #ddd6fe;">
                         <i data-lucide="clipboard-check" style="width:19px;height:19px;color:#7c3aed;"></i>
                     </div>
@@ -308,16 +312,11 @@ $historyJson = json_encode(array_map(function ($r) {
                     <div class="stat-progress">
                         <div class="stat-progress-fill" style="width:<?= min($totalAttended * 10, 100) ?>%;"></div>
                     </div>
-                    <div class="stat-icon-bg">
-                        <i data-lucide="clipboard-check" style="width:52px;height:52px;"></i>
-                    </div>
+                    <div class="stat-icon-bg"><i data-lucide="clipboard-check" style="width:52px;height:52px;"></i></div>
                 </div>
 
-                <!-- Attendance Rate -->
                 <div class="stat-card anim" style="animation-delay:.13s;--card-bar:#16a34a;">
-                    <div class="live-badge" style="color:var(--green);">
-                        <span class="live-dot" style="background:var(--green);"></span> Live
-                    </div>
+                    <div class="live-badge" style="color:var(--green);"><span class="live-dot" style="background:var(--green);"></span> Live</div>
                     <div class="stat-icon" style="background:#f0fdf4;border:1px solid #bbf7d0;">
                         <i data-lucide="trending-up" style="width:19px;height:19px;color:#16a34a;"></i>
                     </div>
@@ -326,16 +325,11 @@ $historyJson = json_encode(array_map(function ($r) {
                     <div class="stat-progress">
                         <div class="stat-progress-fill" style="width:<?= $attendanceRate ?>%;background:#16a34a;"></div>
                     </div>
-                    <div class="stat-icon-bg" style="color:#16a34a;">
-                        <i data-lucide="trending-up" style="width:52px;height:52px;"></i>
-                    </div>
+                    <div class="stat-icon-bg" style="color:#16a34a;"><i data-lucide="trending-up" style="width:52px;height:52px;"></i></div>
                 </div>
 
-                <!-- With Check-In -->
                 <div class="stat-card anim" style="animation-delay:.18s;--card-bar:#d97706;">
-                    <div class="live-badge" style="color:var(--amber);">
-                        <span class="live-dot" style="background:var(--amber);"></span> Live
-                    </div>
+                    <div class="live-badge" style="color:var(--amber);"><span class="live-dot" style="background:var(--amber);"></span> Live</div>
                     <div class="stat-icon" style="background:#fffbeb;border:1px solid #fde68a;">
                         <i data-lucide="log-in" style="width:19px;height:19px;color:#d97706;"></i>
                     </div>
@@ -344,16 +338,11 @@ $historyJson = json_encode(array_map(function ($r) {
                     <div class="stat-progress">
                         <div class="stat-progress-fill" style="width:<?= $totalAttended > 0 ? round(($totalWithLogin/$totalAttended)*100) : 0 ?>%;background:#d97706;"></div>
                     </div>
-                    <div class="stat-icon-bg" style="color:#d97706;">
-                        <i data-lucide="log-in" style="width:52px;height:52px;"></i>
-                    </div>
+                    <div class="stat-icon-bg" style="color:#d97706;"><i data-lucide="log-in" style="width:52px;height:52px;"></i></div>
                 </div>
 
-                <!-- Full Sessions -->
                 <div class="stat-card anim" style="animation-delay:.23s;--card-bar:#0284c7;">
-                    <div class="live-badge" style="color:var(--cyan);">
-                        <span class="live-dot" style="background:var(--cyan);"></span> Live
-                    </div>
+                    <div class="live-badge" style="color:var(--cyan);"><span class="live-dot" style="background:var(--cyan);"></span> Live</div>
                     <div class="stat-icon" style="background:#f0f9ff;border:1px solid #bae6fd;">
                         <i data-lucide="timer" style="width:19px;height:19px;color:#0284c7;"></i>
                     </div>
@@ -362,9 +351,7 @@ $historyJson = json_encode(array_map(function ($r) {
                     <div class="stat-progress">
                         <div class="stat-progress-fill" style="width:<?= $totalAttended > 0 ? round(($totalComplete/$totalAttended)*100) : 0 ?>%;background:#0284c7;"></div>
                     </div>
-                    <div class="stat-icon-bg" style="color:#0284c7;">
-                        <i data-lucide="timer" style="width:52px;height:52px;"></i>
-                    </div>
+                    <div class="stat-icon-bg" style="color:#0284c7;"><i data-lucide="timer" style="width:52px;height:52px;"></i></div>
                 </div>
 
             </div><!-- /stats-grid -->
@@ -391,7 +378,10 @@ $historyJson = json_encode(array_map(function ($r) {
                 </div>
 
 
-                <!-- ── FILTER BAR ────────────────────────────── -->
+                <!-- ── FILTER BAR ─────────────────────────────
+                     Date inputs are now wrapped in .filter-dates-wrap
+                     so they can flex-wrap together on narrow screens.
+                     ─────────────────────────────────────────── -->
                 <div class="filter-bar">
                     <div class="search-wrap">
                         <span class="si"><i data-lucide="search" style="width:13px;height:13px;"></i></span>
@@ -414,8 +404,11 @@ $historyJson = json_encode(array_map(function ($r) {
                         <option value="no_scan">No Scan Data</option>
                     </select>
 
-                    <input id="dateFrom" type="date" class="filter-date" title="From date">
-                    <input id="dateTo"   type="date" class="filter-date" title="To date">
+                    <!-- Wrapped date pair -->
+                    <div class="filter-dates-wrap">
+                        <input id="dateFrom" type="date" class="filter-date" title="From date">
+                        <input id="dateTo"   type="date" class="filter-date" title="To date">
+                    </div>
 
                     <button id="clearFilters" class="btn-clear">
                         <i data-lucide="x-circle" style="width:13px;height:13px;"></i> Clear
@@ -425,15 +418,15 @@ $historyJson = json_encode(array_map(function ($r) {
 
                 <!-- ── RESULTS BAR ──────────────────────────── -->
                 <div class="results-bar">
-                    <div style="display:flex;align-items:center;gap:.5rem;">
+                    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                         <span class="results-count-strong" id="resultsCount">—</span>
                         record<span id="resultsPlural">s</span> found
                         <span id="activeFilterBadge" class="filter-badge" style="display:none;"></span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:.5rem;">
+                    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
                         <span>Page</span>
                         <span class="results-count-strong" id="pageInfo">1 / 1</span>
-                        <select id="perPageSelect" class="filter-select" style="padding:.3rem .5rem;font-size:.72rem;">
+                        <select id="perPageSelect" class="filter-select" style="padding:.3rem .5rem;font-size:.72rem;flex:0 0 auto;">
                             <option value="10">10 / page</option>
                             <option value="25" selected>25 / page</option>
                             <option value="50">50 / page</option>
@@ -445,8 +438,11 @@ $historyJson = json_encode(array_map(function ($r) {
 
                 <?php if (!empty($attendanceHistory)): ?>
 
-                    <!-- ── DESKTOP TABLE ──────────────────────── -->
-                    <div class="hidden md:block" style="overflow-x:auto;">
+                    <!-- ── DESKTOP TABLE (≥768 px) ────────────
+                         Uses .table-desktop instead of hidden md:block
+                         so CSS controls visibility—not Tailwind.
+                         ──────────────────────────────────────── -->
+                    <div class="table-desktop">
                         <table class="history-table">
                             <thead>
                                 <tr>
@@ -489,9 +485,11 @@ $historyJson = json_encode(array_map(function ($r) {
                         </div>
                     </div>
 
-                    <!-- ── MOBILE CARD VIEW ──────────────────── -->
-                    <div class="md:hidden" id="mobileCardContainer"></div>
-                    <div id="noResultsMobile" class="md:hidden" style="display:none;">
+                    <!-- ── MOBILE CARD VIEW (<768 px) ─────────
+                         Uses .table-mobile instead of md:hidden
+                         ──────────────────────────────────────── -->
+                    <div class="table-mobile" id="mobileCardContainer"></div>
+                    <div id="noResultsMobile" class="table-mobile" style="display:none;">
                         <div class="empty-state">
                             <p class="empty-sub">No records match your filters.</p>
                             <button onclick="clearAllFilters()" class="btn-primary" style="margin-top:.5rem;">Clear Filters</button>
@@ -501,7 +499,7 @@ $historyJson = json_encode(array_map(function ($r) {
                     <!-- Pagination -->
                     <div class="pagination-bar" id="paginationBar">
                         <p id="paginationInfo">Showing — of — records</p>
-                        <div style="display:flex;align-items:center;gap:.375rem;" id="paginationControls"></div>
+                        <div style="display:flex;align-items:center;gap:.375rem;flex-wrap:wrap;" id="paginationControls"></div>
                     </div>
 
                 <?php else: ?>

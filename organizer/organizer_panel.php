@@ -470,6 +470,27 @@ $annCount      = count($announcements);
             </span>
             Analytics
         </a>
+
+        <p class="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 px-3 pt-4 pb-1 font-semibold">Communication</p>
+        <a href="/organizer/organizer_chat.php"
+           class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+           aria-current="page">
+            <span class="icon-wrap w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-500 dark:text-rose-400 flex items-center justify-center text-sm">
+    <i class="fas fa-comments"></i>
+</span>
+            Messages
+            <span id="sidebarBadge"
+                  class="ml-auto text-[11px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full font-semibold hidden"></span>
+        </a>
+
+        <a href="/organizer/organizer_admin_chat.php"
+                   class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
+                    <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-sm">
+    <i class="fas fa-user-shield"></i>
+</span>
+                    Admin Messages
+                    <span id="adminBadge" class="ml-auto hidden text-[10px] font-bold bg-brand-500 text-white rounded-full px-1.5 py-0.5"></span>
+                </a>
     </nav>
 
     <div class="p-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
