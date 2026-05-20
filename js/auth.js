@@ -7,6 +7,12 @@
 //     initialPanel, takenByOrg, takenByClub,
 //     orgsWithLogo, clubsWithLogo
 //   }
+//
+// Real-time dropdown sync:
+//   Polls /api/get_dropdown_data.php every POLL_INTERVAL ms.
+//   On change the dropdowns are diff-merged — selections that
+//   still exist in the updated list are preserved; removed
+//   items are deselected gracefully with a user notice.
 // ═══════════════════════════════════════════════════════════
 
 (function () {
@@ -15,10 +21,12 @@
     // ── PHP-injected data (set inline before this file loads) ──
     const DATA            = window.SEMS_DATA || {};
     const initialPanel    = DATA.initialPanel   || "login";
-    const TAKEN_BY_ORG    = DATA.takenByOrg     || {};
-    const TAKEN_BY_CLUB   = DATA.takenByClub    || {};
-    const ORGS_WITH_LOGO  = DATA.orgsWithLogo   || [];
-    const CLUBS_WITH_LOGO = DATA.clubsWithLogo  || [];
+
+    // Live copies — these get replaced by each poll response
+    let TAKEN_BY_ORG    = DATA.takenByOrg     || {};
+    let TAKEN_BY_CLUB   = DATA.takenByClub    || {};
+    let ORGS_WITH_LOGO  = DATA.orgsWithLogo   || [];
+    let CLUBS_WITH_LOGO = DATA.clubsWithLogo  || [];
 
     // ── Constants ───────────────────────────────────────────
     const SSG_ORG_ID      = "1";
@@ -28,9 +36,11 @@
     const REMEMBER_KEY    = "sems_remembered_emails";
     const MAX_REMEMBERED  = 5;
 
+    const POLL_INTERVAL   = 30_000;           // 30 s between polls
+    const POLL_ENDPOINT   = "/api/get_dropdown_data.php";
+
     // Student number: YY-N-NNNNN  e.g. 24-1-05560
     const SNUM_REGEX  = /^\d{2}-\d{1}-\d{5}$/;
-    const SNUM_MAXLEN = 10;
 
     // ── Element references ───────────────────────────────────
     const card         = document.getElementById("authCard");
@@ -40,6 +50,252 @@
     const loginSec     = document.getElementById("loginSection");
     const registerSec  = document.getElementById("registerSection");
     const formScroll   = document.getElementById("formScroll");
+
+    // ═══════════════════════════════════════════════════════
+    // ① REAL-TIME DROPDOWN SYNC
+    //    Polls the API endpoint and diff-merges each select.
+    // ═══════════════════════════════════════════════════════
+
+    /** Build a live status badge shown near the register title */
+    let _syncBadge = null;
+
+    function getSyncBadge() {
+        if (_syncBadge) return _syncBadge;
+        _syncBadge = document.createElement("div");
+        _syncBadge.id = "dropdownSyncBadge";
+        _syncBadge.style.cssText = [
+            "display:inline-flex",
+            "align-items:center",
+            "gap:5px",
+            "font-size:10.5px",
+            "font-weight:600",
+            "letter-spacing:.04em",
+            "color:#94a3b8",
+            "background:rgba(99,102,241,0.06)",
+            "border:1px solid rgba(99,102,241,0.14)",
+            "border-radius:20px",
+            "padding:3px 10px 3px 7px",
+            "margin-left:10px",
+            "vertical-align:middle",
+            "transition:all .35s",
+        ].join(";");
+        _syncBadge.innerHTML =
+            '<span id="syncDot" style="width:6px;height:6px;border-radius:50%;' +
+            'background:#10b981;display:inline-block;transition:background .3s;"></span>' +
+            '<span id="syncLabel">Live</span>';
+
+        // Attach after the "Create Account" h1
+        const h1 = registerSec && registerSec.querySelector("h1.form-title");
+        if (h1) h1.appendChild(_syncBadge);
+        return _syncBadge;
+    }
+
+    function setSyncState(state) {
+        // state: "live" | "syncing" | "error"
+        const dot   = document.getElementById("syncDot");
+        const label = document.getElementById("syncLabel");
+        if (!dot || !label) return;
+
+        const map = {
+            live    : { bg: "#10b981", text: "Live"     , badgeColor: "#10b981" },
+            syncing : { bg: "#f59e0b", text: "Syncing…" , badgeColor: "#f59e0b" },
+            error   : { bg: "#ef4444", text: "Offline"  , badgeColor: "#ef4444" },
+        };
+        const s = map[state] || map.live;
+        dot.style.background = s.bg;
+        label.textContent    = s.text;
+        const badge = getSyncBadge();
+        badge.style.borderColor = s.badgeColor + "44";
+        badge.style.color       = s.badgeColor;
+    }
+
+    /**
+     * Diff-merge a <select> element against a fresh list of {id, name} objects.
+     *
+     * Rules:
+     *  • Items added in DB   → appended to the list
+     *  • Items removed in DB → option removed; if it was selected, selection
+     *                          is cleared and a toast is shown
+     *  • Items renamed       → text updated, selection preserved
+     *  • Placeholder option  → always kept first
+     */
+    function mergeSelect(selectEl, freshItems, idKey, nameKey, removedMsg) {
+        if (!selectEl) return;
+
+        const prevValue = selectEl.value;
+        const freshMap  = {};
+        freshItems.forEach(item => { freshMap[String(item[idKey])] = item[nameKey]; });
+
+        // ── Remove options that no longer exist in DB ────────
+        let wasRemoved = false;
+        Array.from(selectEl.options).forEach(opt => {
+            if (!opt.value) return;                    // skip placeholder
+            if (!freshMap[opt.value]) {
+                const wasSelected = (opt.value === prevValue);
+                opt.remove();
+                if (wasSelected) wasRemoved = true;
+            }
+        });
+
+        // ── Update names + add new options ───────────────────
+        const existingValues = new Set(
+            Array.from(selectEl.options).map(o => o.value)
+        );
+
+        freshItems.forEach(item => {
+            const id  = String(item[idKey]);
+            const name = item[nameKey];
+            if (existingValues.has(id)) {
+                // Update label if renamed
+                const opt = selectEl.querySelector(`option[value="${id}"]`);
+                if (opt && opt.text !== name) opt.text = name;
+            } else {
+                // New option — append before the end
+                const opt   = document.createElement("option");
+                opt.value   = id;
+                opt.text    = name;
+                selectEl.appendChild(opt);
+            }
+        });
+
+        // ── Restore or clear ─────────────────────────────────
+        if (!wasRemoved && prevValue && selectEl.querySelector(`option[value="${prevValue}"]`)) {
+            selectEl.value = prevValue;
+        } else if (wasRemoved) {
+            selectEl.value = "";
+            showToast(removedMsg, "warning");
+        }
+    }
+
+    /**
+     * Small non-blocking toast notification — used when a dropdown item
+     * a user had selected gets removed by an admin during their session.
+     */
+    function showToast(html, type) {
+        const colors = {
+            warning : { bg: "#fef3c7", border: "#f59e0b", icon: "fa-triangle-exclamation", color: "#92400e" },
+            info    : { bg: "#eff6ff", border: "#6366f1", icon: "fa-circle-info",           color: "#3730a3" },
+            error   : { bg: "#fef2f2", border: "#ef4444", icon: "fa-circle-xmark",          color: "#991b1b" },
+        };
+        const c   = colors[type] || colors.info;
+        const el  = document.createElement("div");
+        el.style.cssText = [
+            "position:fixed", "bottom:24px", "right:24px", "z-index:9999",
+            `background:${c.bg}`, `border:1px solid ${c.border}44`,
+            "border-radius:14px", "padding:12px 18px",
+            "font-size:12.5px", `color:${c.color}`, "font-weight:500",
+            "box-shadow:0 8px 32px rgba(0,0,0,0.12)", "max-width:340px",
+            "display:flex", "align-items:flex-start", "gap:8px",
+            "animation:fadeInUp .35s ease", "line-height:1.55",
+        ].join(";");
+        el.innerHTML = `<i class="fa-solid ${c.icon}" style="margin-top:2px;"></i><span>${html}</span>`;
+        document.body.appendChild(el);
+        setTimeout(() => {
+            el.style.transition = "opacity .4s";
+            el.style.opacity    = "0";
+            setTimeout(() => el.remove(), 420);
+        }, 5000);
+    }
+
+    /**
+     * Inject a <style> block for the toast animation once.
+     */
+    (function injectToastStyles() {
+        if (document.getElementById("semsToastStyle")) return;
+        const s = document.createElement("style");
+        s.id = "semsToastStyle";
+        s.textContent = `
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(12px); }
+                to   { opacity: 1; transform: translateY(0);    }
+            }
+        `;
+        document.head.appendChild(s);
+    })();
+
+    /**
+     * Apply a fresh data payload from the API endpoint.
+     * Called on every successful poll.
+     */
+    function applyFreshData(data) {
+        // 1. Merge department dropdown
+        if (Array.isArray(data.departments) && data.departments.length) {
+            mergeSelect(
+                document.getElementById("deptSelect"),
+                data.departments,
+                "id", "name",
+                "⚠ The department you had selected was removed by an admin. Please re-select."
+            );
+        }
+
+        // 2. Merge organization dropdown
+        if (Array.isArray(data.organizations)) {
+            mergeSelect(
+                document.getElementById("orgSelect"),
+                data.organizations,
+                "id", "name",
+                "⚠ The organization you selected was removed by an admin. Please re-select."
+            );
+        }
+
+        // 3. Merge club dropdown
+        if (Array.isArray(data.clubs)) {
+            mergeSelect(
+                document.getElementById("clubSelect"),
+                data.clubs,
+                "id", "name",
+                "⚠ The club you selected was removed by an admin. Please re-select."
+            );
+        }
+
+        // 4. Update live position + logo state
+        if (data.takenByOrg)    TAKEN_BY_ORG    = data.takenByOrg;
+        if (data.takenByClub)   TAKEN_BY_CLUB   = data.takenByClub;
+        if (data.orgsWithLogo)  ORGS_WITH_LOGO  = data.orgsWithLogo;
+        if (data.clubsWithLogo) CLUBS_WITH_LOGO = data.clubsWithLogo;
+
+        // 5. Re-evaluate position options with fresh taken data
+        updatePositionOptions();
+
+        // 6. Re-evaluate logo visibility / notices
+        updateLogoVisibility();
+    }
+
+    /** Core polling function */
+    function pollDropdownData() {
+        setSyncState("syncing");
+
+        fetch(POLL_ENDPOINT + "?_t=" + Date.now(), {
+            method      : "GET",
+            cache       : "no-store",
+            credentials : "same-origin",
+        })
+        .then(res => {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+        })
+        .then(data => {
+            applyFreshData(data);
+            setSyncState("live");
+        })
+        .catch(() => {
+            setSyncState("error");
+            // Silently retry on next interval — do not block UX
+        });
+    }
+
+    /** Bootstrap the sync badge + start polling */
+    function initRealtimeSync() {
+        // Ensure the badge exists (it attaches itself to the h1)
+        getSyncBadge();
+        setSyncState("live");
+
+        // Initial poll immediately (catches changes since page load)
+        setTimeout(pollDropdownData, 1500);
+
+        // Then every POLL_INTERVAL
+        setInterval(pollDropdownData, POLL_INTERVAL);
+    }
 
     // ═══════════════════════════════════════════════════════
     // Panel switching
@@ -105,22 +361,15 @@
 
     // ═══════════════════════════════════════════════════════
     // Student Number — mask + FORMAT validation + DB check
-    //
-    // After format passes, an AJAX call is made to
-    // /check_snum.php which queries BOTH profiles AND organizer
-    // tables. If the number exists in either, the border turns
-    // red and an inline alert is shown.
     // ═══════════════════════════════════════════════════════
     function initStudentNumberMask() {
         const input = document.getElementById("studentNumInput");
         if (!input) return;
 
-        // Track the last AJAX-checked value and whether it was taken
-        let lastChecked   = "";   // last value sent to the server
-        let lastWasTaken  = false;// result of the last completed check
-        let checkDebounce = null; // debounce timer handle
+        let lastChecked   = "";
+        let lastWasTaken  = false;
+        let checkDebounce = null;
 
-        // ── Mask helper ──────────────────────────────────────
         function applyMask(digits) {
             digits = digits.slice(0, 8);
             if (digits.length <= 2)       return digits;
@@ -130,7 +379,6 @@
 
         const hintEl = document.getElementById("snumFormatHint");
 
-        // ── Four visual states ───────────────────────────────
         function setNeutral() {
             const wrap = input.closest(".input-wrap");
             if (wrap) { wrap.style.borderColor = ""; wrap.style.boxShadow = ""; }
@@ -157,7 +405,6 @@
                 hintEl.style.color = "#10b981";
                 hintEl.innerHTML   = '<i class="fa-solid fa-circle-check" style="font-size:10px;"></i> Valid &amp; available ✓';
             }
-            // Dismiss any stale "taken" alert
             const alert = document.getElementById("jsInlineAlert");
             if (alert) alert.remove();
         }
@@ -182,7 +429,6 @@
                     '<i class="fa-solid fa-circle-xmark" style="font-size:10px;"></i> ' +
                     (message || "Student number already exists.");
             }
-            // Top-of-form alert so it's unmissable
             showInlineAlert(
                 "Student number <strong>" + input.value + "</strong> is already taken. " +
                 (message || ""),
@@ -190,15 +436,9 @@
             );
         }
 
-        // ── AJAX uniqueness check ────────────────────────────
-        // Queries /check_snum.php which checks BOTH profiles
-        // and organizer tables server-side.
         function checkUniqueness(value) {
             if (value === lastChecked) {
-                // Re-apply the cached result without a new request
                 if (lastWasTaken) {
-                    const h = hintEl ? hintEl.innerHTML : "";
-                    // hint already shows the error; re-show the top alert
                     showInlineAlert(
                         "Student number <strong>" + value + "</strong> is already taken.",
                         "error"
@@ -212,23 +452,15 @@
             fetch("/check_snum.php?snum=" + encodeURIComponent(value))
                 .then(function (res) { return res.json(); })
                 .then(function (data) {
-                    // Guard: ignore if the user already changed the input
                     if (input.value !== value) return;
-
-                    if (data.available) {
-                        setValid();
-                    } else {
-                        setTaken(data.message || "");
-                    }
+                    if (data.available) setValid();
+                    else setTaken(data.message || "");
                 })
                 .catch(function () {
-                    // Network / server error — fail open;
-                    // PHP will catch it on submit.
                     if (input.value === value) setValid();
                 });
         }
 
-        // ── Master validate: format first, then DB ───────────
         function validateAndTriggerCheck(value) {
             clearTimeout(checkDebounce);
 
@@ -246,20 +478,17 @@
                 return;
             }
 
-            // Format is OK — debounce the AJAX call (600 ms)
             checkDebounce = setTimeout(function () {
                 checkUniqueness(value);
             }, 600);
         }
 
-        // ── Keystroke guard (digits only) ────────────────────
         input.addEventListener("keydown", function (e) {
             const nav = ["Backspace","Delete","ArrowLeft","ArrowRight","Home","End","Tab"];
             if (nav.includes(e.key) || e.ctrlKey || e.metaKey) return;
             if (!/^\d$/.test(e.key)) e.preventDefault();
         });
 
-        // ── Auto-mask on input ───────────────────────────────
         input.addEventListener("input", function () {
             const cursorWasAtEnd = (this.selectionStart === this.value.length);
             const digits  = this.value.replace(/\D/g, "");
@@ -269,7 +498,6 @@
             validateAndTriggerCheck(masked);
         });
 
-        // ── Paste ────────────────────────────────────────────
         input.addEventListener("paste", function (e) {
             e.preventDefault();
             const raw    = (e.clipboardData || window.clipboardData).getData("text");
@@ -278,7 +506,6 @@
             validateAndTriggerCheck(this.value);
         });
 
-        // ── Blur: fire AJAX immediately (skip debounce) ──────
         input.addEventListener("blur", function () {
             const val = this.value;
             if (!val || !SNUM_REGEX.test(val)) {
@@ -289,7 +516,6 @@
             checkUniqueness(val);
         });
 
-        // ── Submit guard ─────────────────────────────────────
         const form = document.getElementById("registerForm");
         if (form) {
             form.addEventListener("submit", function (e) {
@@ -298,7 +524,6 @@
                     const val  = input.value.trim();
                     const wrap = input.closest(".input-wrap");
 
-                    // Block: empty
                     if (!val) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
@@ -311,7 +536,6 @@
                         return;
                     }
 
-                    // Block: wrong format
                     if (!SNUM_REGEX.test(val)) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
@@ -328,7 +552,6 @@
                         return;
                     }
 
-                    // Block: AJAX already determined taken
                     if (lastWasTaken && val === lastChecked) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
@@ -346,7 +569,6 @@
             }, true);
         }
 
-        // Run once on load (repopulated value after failed submit)
         validateAndTriggerCheck(input.value);
     }
 
@@ -552,7 +774,6 @@
         document.getElementById("orgLogoWrap").classList.add("hidden-field");
         document.getElementById("clubLogoWrap").classList.add("hidden-field");
 
-        // Clear all role-specific required flags
         const academicInputIds = [
             "deptSelect", "studentNumInput", "yearLevelSelect",
             "sectionSelect", "positionSelect"
@@ -562,7 +783,6 @@
             if (el) el.removeAttribute("required");
         });
 
-        // Reset snum border when role changes
         const snumInput = document.getElementById("studentNumInput");
         const snumWrap  = snumInput && snumInput.closest(".input-wrap");
         if (snumWrap) {
@@ -931,6 +1151,7 @@
         initFormHandlers();
         initStudentNumberMask();
         initBubbles();
+        initRealtimeSync();   // ← real-time dropdown polling
     }
 
     if (document.readyState === "loading") {

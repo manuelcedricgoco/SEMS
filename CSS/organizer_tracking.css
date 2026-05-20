@@ -327,10 +327,43 @@ a[href*="?page="]:active { transform: scale(.96); }
   transition: opacity .25s var(--ease-out);
 }
 
-/* Modal close button */
-button[onclick*="closeDeleteModal"]:hover {
+/* Ensure modal never clips off screen */
+#deleteModal > .modal-pop {
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+/* Modal action buttons — stack vertically on very small screens */
+.modal-btn-row {
+  display: flex;
+  gap: 0.75rem;
+}
+@media (max-width: 400px) {
+  .modal-btn-row {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+  .modal-btn-row button {
+    width: 100%;
+    flex: none !important;
+  }
+  .modal-pop .modal-body {
+    padding: 1rem !important;
+  }
+}
+
+/* Modal ✕ icon button only — scoped to header so "No, Keep It" is excluded */
+#deleteModal .modal-pop > div:first-child button {
+  transition: transform .2s var(--ease-spring), background .2s, color .2s;
+}
+#deleteModal .modal-pop > div:first-child button:hover {
   transform: rotate(90deg) scale(1.1);
-  transition: transform .2s var(--ease-spring);
+}
+
+/* "No, Keep It" — no rotation ever */
+#deleteModal button[onclick*="closeDeleteModal"]:not(#deleteModal .modal-pop > div:first-child button) {
+  transform: none !important;
+  transition: background .2s, color .2s;
 }
 
 /* Confirm delete button */

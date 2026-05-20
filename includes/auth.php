@@ -740,7 +740,7 @@ $post_club     = $_POST['club_id']   ?? '';
                                             <option value="1" <?= $post_dept === '1' ? 'selected' : '' ?>>BS Information Technology</option>
                                             <option value="2" <?= $post_dept === '2' ? 'selected' : '' ?>>BS Operational Management</option>
                                             <option value="3" <?= $post_dept === '3' ? 'selected' : '' ?>>BS Financial Management</option>
-                                            <option value="4" <?= $post_dept === '4' ? 'selected' : '' ?>>BS Elementary Education</option>
+                                            <option value="4" <?= $post_dept === '4' ? 'selected' : '' ?>>Bachelor Elementary Education</option>
                                         </select>
                                     </div>
                                 </div>
