@@ -464,13 +464,13 @@ $archivedJson = json_encode($archivedUsers ?: [], JSON_HEX_TAG | JSON_HEX_APOS |
                         <div class="sm:ml-auto">
                             <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
                                 <i class="fas fa-users mr-1.5 text-primary-500"></i>
-                                <span id="result-num">0</span> accounts
+                                <span id="result-num" class="mr-1">0</span> accounts
                             </span>
                         </div>
                     </div>
 
                     <!-- Users Table -->
-                    <div class="animate-fade-up bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" style="animation-delay:.15s">
+                    <div class="animate-fade-up mt-5 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" style="animation-delay:.15s">
                         <div class="px-6 py-5 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between flex-wrap gap-3">
                             <div>
                                 <p class="font-bold text-slate-900 dark:text-white text-lg">All Users</p>
@@ -526,7 +526,7 @@ $archivedJson = json_encode($archivedUsers ?: [], JSON_HEX_TAG | JSON_HEX_APOS |
                             </div>
                             <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
                                 <i class="fas fa-archive mr-1.5 text-amber-500"></i>
-                                <span id="archive-result-num">0</span> archived
+                                <span id="archive-result-num" class="mr-1">0</span> archived
                             </span>
                         </div>
                     </div>
