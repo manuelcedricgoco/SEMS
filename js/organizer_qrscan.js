@@ -68,17 +68,25 @@ function captureVideoFrame() {
 
 /* ══════════════════════════════════════════════════════════════
    PROOF CAMERA OVERLAY
+   ─────────────────────────────────────────────────────────────
+   Uses navigator.mediaDevices.getUserMedia so it works on:
+     • Desktop / laptop  (webcam, any browser)
+     • Mobile            (rear camera preferred via 'environment')
+   Falls back to the file picker if getUserMedia is denied or
+   unavailable.
 ══════════════════════════════════════════════════════════════ */
 let proofCameraStream = null;
 
 function openProofCamera() {
     const overlay = document.getElementById('proofCameraOverlay');
 
+    // Safety net: if the overlay HTML is somehow missing, fall back to file picker
     if (!overlay) {
         document.getElementById('manualProofInput').click();
         return;
     }
 
+    // Show the overlay
     overlay.classList.remove('hidden');
     overlay.classList.add('flex');
 
@@ -87,34 +95,47 @@ function openProofCamera() {
     const errBox = document.getElementById('proofCameraError');
     const capBtn = document.getElementById('proofCaptureBtn');
 
+    // Reset state
     if (errBox) errBox.classList.add('hidden');
     if (capBtn) capBtn.disabled = true;
     if (hint)   hint.textContent = 'Starting camera…';
 
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+    // ── Try rear camera first (ideal for mobile), then any camera (desktop) ──
+    const rearConstraints = {
+        video: {
+            facingMode: { ideal: 'environment' },
+            width:  { ideal: 1280 },
+            height: { ideal: 720 }
+        },
         audio: false
-    })
-    .then(stream => startStream(stream))
-    .catch(() => {
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then(stream => startStream(stream))
-        .catch(err => {
-            console.warn('Camera unavailable:', err);
-            if (hint)   hint.textContent = 'Camera unavailable';
-            if (errBox) errBox.classList.remove('hidden');
-        });
-    });
+    };
+    const anyConstraints = { video: true, audio: false };
 
-    function startStream(stream) {
-        proofCameraStream = stream;
-        video.srcObject   = stream;
-        video.play();
-        if (hint)   hint.textContent = 'Point camera at student, then tap the button';
-        if (capBtn) capBtn.disabled  = false;
-    }
+    navigator.mediaDevices.getUserMedia(rearConstraints)
+        .then(stream  => _startProofStream(stream, hint, capBtn, video))
+        .catch(() =>
+            navigator.mediaDevices.getUserMedia(anyConstraints)
+                .then(stream  => _startProofStream(stream, hint, capBtn, video))
+                .catch(err => {
+                    console.warn('Proof camera unavailable:', err);
+                    if (hint)   hint.textContent = 'Camera unavailable';
+                    if (capBtn) capBtn.disabled  = true;
+                    if (errBox) errBox.classList.remove('hidden');
+                })
+        );
 }
 
+function _startProofStream(stream, hint, capBtn, video) {
+    proofCameraStream  = stream;
+    video.srcObject    = stream;
+    video.play();
+    if (hint)   hint.textContent = 'Position the student in frame, then tap Capture';
+    if (capBtn) capBtn.disabled  = false;
+}
+
+/**
+ * Snap a still from the live proof camera, store as base64, close overlay.
+ */
 function captureProofPhoto() {
     const video = document.getElementById('proofCameraVideo');
     if (!video || !video.videoWidth) return;
@@ -127,6 +148,7 @@ function captureProofPhoto() {
     const dataUrl  = canvas.toDataURL('image/jpeg', 0.82);
     manualProofB64 = dataUrl.split(',')[1];
 
+    // Show the thumbnail inside the proof zone
     document.getElementById('manualProofImg').src = dataUrl;
     document.getElementById('manualProofPlaceholder').classList.add('hidden');
     document.getElementById('manualProofPreview').classList.remove('hidden');
@@ -135,6 +157,9 @@ function captureProofPhoto() {
     closeProofCamera();
 }
 
+/**
+ * Stop the camera stream and hide the overlay.
+ */
 function closeProofCamera() {
     if (proofCameraStream) {
         proofCameraStream.getTracks().forEach(t => t.stop());
@@ -147,11 +172,18 @@ function closeProofCamera() {
     }
 }
 
+/**
+ * Called by the "Browse" button inside the proof camera overlay.
+ * Closes the camera and opens the OS file picker as a fallback.
+ */
 function proofFallbackFilePicker() {
     closeProofCamera();
     document.getElementById('manualProofInput').click();
 }
 
+/**
+ * Clear the captured proof photo and reset the zone to its empty state.
+ */
 function resetManualProof() {
     manualProofB64 = null;
     const input = document.getElementById('manualProofInput');
@@ -164,6 +196,10 @@ function resetManualProof() {
     if (zone)        { zone.classList.remove('captured'); zone.style.borderColor = ''; zone.style.background = ''; }
 }
 
+/**
+ * Handles the hidden file input — used only when the user taps "Browse" or
+ * getUserMedia is unavailable (proofFallbackFilePicker).
+ */
 function handleManualProof(input) {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
@@ -470,8 +506,11 @@ document.getElementById("sn_value_input").addEventListener("keydown", e=>{ if(e.
 
 document.addEventListener("keydown", e => {
     if (e.key !== "Escape") return;
+    // 1. Close proof camera overlay first (highest z-index)
     const cam = document.getElementById('proofCameraOverlay');
     if (cam && !cam.classList.contains('hidden')) { closeProofCamera(); return; }
-    if (!document.getElementById("scannerModal").classList.contains("hidden")) closeScanner();
+    // 2. Then QR scanner modal
+    if (!document.getElementById("scannerModal").classList.contains("hidden")) { closeScanner(); return; }
+    // 3. Then manual entry modal
     if (!document.getElementById("manualModal").classList.contains("hidden"))  closeManual();
 });

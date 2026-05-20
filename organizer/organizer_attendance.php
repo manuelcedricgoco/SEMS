@@ -265,6 +265,7 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
     <title>Attendance – SEMS</title>
     <link rel="icon" href="/assets/attendance-icon-indigo.svg">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="/CSS/organizer_attendance.css">
@@ -1197,6 +1198,8 @@ $absentPct  = $totalAtt > 0 ? round($absentCount  / $totalAtt * 100) : 0;
 
     })();
     </script>
+
+    <script src="/js/fraud_detection.js"></script>
 
 </body>
 </html>

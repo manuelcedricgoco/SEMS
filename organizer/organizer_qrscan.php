@@ -346,7 +346,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_scan'])) {
 
         if ($success) {
             $pdo->commit();
-            echo json_encode(['success' => true, 'name' => $student['name'], 'scan_type' => $scanType]);
+            $profImgB64 = '';
+$piQ = $pdo->prepare("SELECT profile_image FROM profiles WHERE user_id = ?");
+$piQ->execute([$studentId]);
+$piRow = $piQ->fetch(PDO::FETCH_ASSOC);
+if (!empty($piRow['profile_image'])) {
+    $profImgB64 = base64_encode($piRow['profile_image']);
+}
+echo json_encode([
+    'success'           => true,
+    'name'              => $student['name'],
+    'scan_type'         => $scanType,
+    'profile_image_b64' => $profImgB64,
+]);
         } else {
             $pdo->rollBack();
             echo json_encode(['success' => false, 'message' => 'Failed to record']);
@@ -407,6 +419,7 @@ unset($ev);
     <link rel="icon" href="/assets/qrcode-icon-indigo.svg">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="/CSS/organizer_qrscan.css">
@@ -489,6 +502,39 @@ unset($ev);
         }
         .manual-modal-inner .proof-zone:hover {
             border-color: rgba(34,197,94,.5);
+        }
+
+        /* ── Proof Camera Overlay ── */
+        #proofCameraOverlay .cam-modal {
+            background: #0f1117;
+            border: 1px solid rgba(255,255,255,.08);
+            box-shadow: 0 32px 80px rgba(0,0,0,.7);
+        }
+        #proofCameraVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .cam-corner {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+        }
+        .cam-corner-tl { top: -1px; left: -1px;  border-top: 2px solid #a855f7; border-left:  2px solid #a855f7; border-radius: 4px 0 0 0; }
+        .cam-corner-tr { top: -1px; right: -1px; border-top: 2px solid #a855f7; border-right: 2px solid #a855f7; border-radius: 0 4px 0 0; }
+        .cam-corner-bl { bottom: -1px; left: -1px;  border-bottom: 2px solid #a855f7; border-left:  2px solid #a855f7; border-radius: 0 0 0 4px; }
+        .cam-corner-br { bottom: -1px; right: -1px; border-bottom: 2px solid #a855f7; border-right: 2px solid #a855f7; border-radius: 0 0 4px 0; }
+        #proofCaptureBtn:not(:disabled) {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            box-shadow: 0 4px 16px rgba(168,85,247,.4);
+        }
+        #proofCaptureBtn:not(:disabled):hover {
+            box-shadow: 0 6px 20px rgba(168,85,247,.55);
+            transform: translateY(-1px);
+        }
+        #proofCaptureBtn:not(:disabled):active {
+            transform: scale(.97);
         }
     </style>
 </head>
@@ -595,8 +641,8 @@ unset($ev);
                class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
                aria-current="page">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-500 dark:text-rose-400 flex items-center justify-center text-sm">
-    <i class="fas fa-comments"></i>
-</span>
+                    <i class="fas fa-comments"></i>
+                </span>
                 Messages
                 <span id="sidebarBadge"
                       class="ml-auto text-[11px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full font-semibold hidden"></span>
@@ -605,8 +651,8 @@ unset($ev);
             <a href="/organizer/organizer_admin_chat.php"
                class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm">
                 <span class="icon-wrap w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-500 dark:text-indigo-400 flex items-center justify-center text-sm">
-    <i class="fas fa-user-shield"></i>
-</span>
+                    <i class="fas fa-user-shield"></i>
+                </span>
                 Admin Messages
                 <span id="adminBadge" class="ml-auto hidden text-[10px] font-bold bg-brand-500 text-white rounded-full px-1.5 py-0.5"></span>
             </a>
@@ -1088,6 +1134,7 @@ unset($ev);
                     </p>
                 </div>
 
+                <!-- ── PROOF PHOTO ZONE ── -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <label class="text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
@@ -1100,13 +1147,19 @@ unset($ev);
                         </span>
                     </div>
 
+                    <!-- Hidden file input as fallback -->
                     <input type="file" id="manualProofInput"
-                        accept="image/*" capture="environment"
+                        accept="image/*"
                         class="hidden" onchange="handleManualProof(this)">
 
+                    <!-- FIX: onclick now calls openProofCamera() instead of directly
+                         triggering the file input — this opens the live camera on
+                         desktop/laptop via getUserMedia, and on mobile uses the
+                         rear-facing camera. The file picker is only used as fallback
+                         when getUserMedia is unavailable (proofFallbackFilePicker). -->
                     <div id="manualProofZone"
                         class="proof-zone"
-                        onclick="document.getElementById('manualProofInput').click()"
+                        onclick="openProofCamera()"
                         title="Tap to capture student photo">
 
                         <div id="manualProofPlaceholder" class="text-center py-3 px-4 select-none">
@@ -1130,7 +1183,7 @@ unset($ev);
                                 <i class="fas fa-check-circle mr-1"></i> Photo captured
                             </p>
                             <button class="proof-retake-btn"
-                                onclick="event.stopPropagation(); resetManualProof();"
+                                onclick="event.stopPropagation(); openProofCamera();"
                                 title="Retake photo">
                                 <i class="fas fa-redo"></i> Retake
                             </button>
@@ -1164,9 +1217,104 @@ unset($ev);
         </div>
     </div>
 
+    <!-- ============================================================
+     PROOF CAMERA OVERLAY
+     Opens a live camera feed (getUserMedia) so the organizer can
+     take a real-time photo on desktop AND mobile.
+     Falls back to file picker via proofFallbackFilePicker() if the
+     browser denies camera access.
+    ============================================================ -->
+    <div id="proofCameraOverlay"
+         class="fixed inset-0 z-[60] hidden items-center justify-center p-4"
+         style="background:rgba(2,6,18,.85); backdrop-filter:blur(10px);">
+
+        <div class="cam-modal rounded-2xl w-full max-w-sm overflow-hidden" style="border:1px solid rgba(255,255,255,.08); box-shadow:0 32px 80px rgba(0,0,0,.7);">
+
+            <!-- Header -->
+            <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid rgba(255,255,255,.07);">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center text-sm flex-shrink-0"
+                         style="background:rgba(168,85,247,.18); color:#c084fc; border:1px solid rgba(168,85,247,.25);">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-white">Capture Proof Photo</p>
+                        <p id="proofCameraHint" class="text-[11px] mt-0.5" style="color:rgba(255,255,255,.4);">Starting camera…</p>
+                    </div>
+                </div>
+                <!-- Browse fallback -->
+                <button onclick="proofFallbackFilePicker()"
+                        class="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                        style="background:rgba(255,255,255,.07); color:rgba(255,255,255,.5);"
+                        onmouseover="this.style.background='rgba(255,255,255,.13)'; this.style.color='rgba(255,255,255,.85)';"
+                        onmouseout="this.style.background='rgba(255,255,255,.07)'; this.style.color='rgba(255,255,255,.5)';">
+                    <i class="fas fa-folder-open text-[10px]"></i> Browse
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-4 space-y-3" style="background:#0f1117;">
+
+                <!-- Live video preview -->
+                <div class="relative rounded-xl overflow-hidden bg-black" style="aspect-ratio:4/3;">
+                    <video id="proofCameraVideo" autoplay playsinline muted
+                           style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+
+                    <!-- Corner reticle -->
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div class="relative" style="width:140px; height:140px;">
+                            <span class="cam-corner cam-corner-tl"></span>
+                            <span class="cam-corner cam-corner-tr"></span>
+                            <span class="cam-corner cam-corner-bl"></span>
+                            <span class="cam-corner cam-corner-br"></span>
+                        </div>
+                    </div>
+
+                    <!-- Hint strip -->
+                    <div class="absolute bottom-0 left-0 right-0 px-3 py-2 text-center text-[11px] font-medium"
+                         style="background:linear-gradient(to top,rgba(0,0,0,.7),transparent); color:rgba(255,255,255,.6);">
+                        Frame the student's face in the centre
+                    </div>
+                </div>
+
+                <!-- Error state -->
+                <div id="proofCameraError"
+                     class="hidden text-xs rounded-lg px-3 py-2.5 flex items-start gap-2"
+                     style="background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.25); color:#fca5a5;">
+                    <i class="fas fa-exclamation-triangle flex-shrink-0 mt-0.5"></i>
+                    <span>Camera unavailable or permission denied. Use <strong>Browse</strong> above to upload a photo instead.</span>
+                </div>
+
+                <!-- Action buttons -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="closeProofCamera()"
+                            class="py-2.5 text-xs font-semibold rounded-xl transition-all active:scale-95"
+                            style="background:rgba(255,255,255,.06); color:rgba(255,255,255,.55); border:1px solid rgba(255,255,255,.1);"
+                            onmouseover="this.style.background='rgba(255,255,255,.12)';"
+                            onmouseout="this.style.background='rgba(255,255,255,.06)';">
+                        <i class="fas fa-times mr-1.5"></i>Cancel
+                    </button>
+                    <button id="proofCaptureBtn"
+                            onclick="captureProofPhoto()"
+                            disabled
+                            class="py-2.5 text-xs font-bold rounded-xl text-white transition-all active:scale-95
+                                   disabled:opacity-35 disabled:cursor-not-allowed disabled:shadow-none">
+                        <i class="fas fa-camera mr-1.5"></i>Capture
+                    </button>
+                </div>
+
+                <p class="text-center text-[10px]" style="color:rgba(255,255,255,.2);">
+                    <i class="fas fa-lock text-[9px] mr-1"></i>
+                    Photo is stored privately and never shared publicly
+                </p>
+            </div>
+        </div>
+    </div>
+
     <div id="temp-qr-scanner" style="display:none;"></div>
 
     <script src="/js/organizer_qrscan.js"></script>
+    <script src="/js/fraud_detection.js"></script>
 </body>
 
 </html>
