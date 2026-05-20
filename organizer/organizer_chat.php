@@ -98,6 +98,7 @@ if (!empty($ctx['org_name']) && ($ctx['org_scope'] ?? '') === 'dept') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Messages – SEMS</title>
+    <link rel="icon" href="/assets/chat-icon-indigo.svg">
     <link rel="stylesheet" href="/CSS/organizer_chat.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
